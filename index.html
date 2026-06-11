@@ -34,11 +34,13 @@
     button{cursor:pointer;border:none;outline:none}
     a{color:var(--accent);text-decoration:none}
 
-    /* ── App shell — 100dvh garante que a barra do browser não corte o nav ── */
+    /* ── App shell ── */
     #app{
-      height:100vh;
-      height:100dvh; /* desktop Chrome e mobile — exclui barra do browser */
-      display:flex;flex-direction:column;overflow:hidden;
+      position:fixed;
+      top:0;left:0;right:0;bottom:0;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
     }
     #header{height:var(--header-h);background:#1a5c5a;border-bottom:none;display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
     #header.visible{display:flex}
@@ -848,7 +850,7 @@ function renderInsumos(itens) {
   if (!itens.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Nenhum insumo encontrado.</div></div>'; return; }
   lista.innerHTML = itens.map(it => {
     const fotoHtml = it.fotoUrl
-      ? `<img src="${esc(it.fotoUrl)}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder insumo',textContent:'📦'}))">`
+      ? `<img src="${esc(_normalizarFotoUrl(it.fotoUrl))}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder insumo',textContent:'📦'}))">`
       : `<div class="item-foto-placeholder insumo">📦</div>`;
     return `
     <div class="item-card" onclick="abrirDetalheInsumo('${esc(it.codigo)}')">
@@ -869,9 +871,23 @@ function filtrarInsumos(t) {
 }
 
 // ══════════════════════════════════════════════════════
-//  FOTO — carrega direto da URL pública do Drive
-//  Formato suportado: https://drive.google.com/thumbnail?sz=w1000&id=...
+//  FOTO — converte qualquer formato de URL do Drive
+//  para o formato uc?export=view que funciona publicamente
 // ══════════════════════════════════════════════════════
+function _normalizarFotoUrl(url) {
+  if (!url || !String(url).trim()) return '';
+  const u = String(url).trim();
+  // Extrai o ID do formato thumbnail: ?id=XXX ou &id=XXX
+  const mId = u.match(/[?&]id=([\w-]+)/);
+  if (mId) return `https://drive.google.com/uc?export=view&id=${mId[1]}`;
+  // Já está no formato uc?export=view
+  if (u.includes('uc?export=view')) return u;
+  // Formato /file/d/ID/view
+  const mFile = u.match(/\/d\/([\w-]+)/);
+  if (mFile) return `https://drive.google.com/uc?export=view&id=${mFile[1]}`;
+  return u;
+}
+
 function _carregarFoto(fotoUrl, wrapId, placeholderId, emoji) {
   const wrap        = document.getElementById(wrapId);
   const placeholder = document.getElementById(placeholderId);
@@ -880,7 +896,7 @@ function _carregarFoto(fotoUrl, wrapId, placeholderId, emoji) {
     placeholder.textContent = emoji;
     return;
   }
-  const url = String(fotoUrl).trim();
+  const url = _normalizarFotoUrl(String(fotoUrl).trim());
   const img     = document.createElement('img');
   img.style.cssText = 'width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s';
   img.alt       = 'Foto do produto';
@@ -976,7 +992,7 @@ function renderPA(itens) {
   if (!itens.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Nenhum PA encontrado.</div></div>'; return; }
   lista.innerHTML = itens.map(it => {
     const fotoHtml = it.fotoUrl
-      ? `<img src="${esc(it.fotoUrl)}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder pa',textContent:'🏭'}))">`
+      ? `<img src="${esc(_normalizarFotoUrl(it.fotoUrl))}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder pa',textContent:'🏭'}))">`
       : `<div class="item-foto-placeholder pa">🏭</div>`;
     return `
     <div class="item-card" onclick="abrirDetalhePA('${esc(it.codigo)}')">
@@ -1189,7 +1205,7 @@ function renderOPS(ops) {
     const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
     const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
     const fotoHtml = op.fotoUrl
-      ? `<img src="${esc(op.fotoUrl)}" style="width:100%;height:100%;object-fit:contain" alt="" onerror="this.style.display='none'">`
+      ? `<img src="${esc(_normalizarFotoUrl(op.fotoUrl))}" style="width:100%;height:100%;object-fit:contain" alt="" onerror="this.style.display='none'">`
       : `<span style="font-size:32px">${op.isPA?'🏭':'📦'}</span>`;
     return `
     <div class="op-row ${parImpar} ${estadoClass}" data-op="${esc(op.op)}">
