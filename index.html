@@ -219,7 +219,16 @@
     .ins-chk-all-wrap{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)}
     .selecionados-count{font-size:11px;color:var(--text-muted);padding:6px 14px;text-align:right}
 
-    @media(min-width:600px){
+    /* ── Fila de impressão ── */
+    #fila-bar{position:fixed;bottom:var(--nav-h);left:0;right:0;background:#1a1a2e;border-top:2px solid var(--accent);padding:10px 16px;display:none;align-items:center;gap:12px;z-index:900;box-shadow:0 -4px 20px rgba(0,0,0,.5)}
+    #fila-bar.visible{display:flex}
+    #fila-bar-info{flex:1;font-size:13px;font-weight:600}
+    #fila-bar-sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+    .btn-imprimir-g{background:#1a73e8;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
+    .btn-imprimir-p{background:#0f6e56;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
+    .btn-limpar-fila{background:transparent;color:var(--text-muted);height:36px;padding:0 10px;border-radius:6px;font-size:12px}
+    .btn-add-g{background:rgba(26,115,232,.2);color:#60a5fa;height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700;border:1px solid rgba(26,115,232,.4)}
+    .btn-add-p{background:rgba(15,110,86,.2);color:#34d399;height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700;border:1px solid rgba(15,110,86,.4)}
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
@@ -350,6 +359,10 @@
     <div class="section-header" style="padding-top:0"><span class="section-title">Endereços</span></div>
     <div id="det-ins-enderecos" class="enderecos-list"></div>
     <div class="acoes-detalhe">
+      <div style="display:flex;gap:8px;margin-bottom:2px">
+        <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
+        <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
+      </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
@@ -412,6 +425,10 @@
     <div class="section-header"><span class="section-title">Estrutura de Insumos</span></div>
     <div id="det-pa-estrutura" class="item-list" style="margin-bottom:8px"></div>
     <div class="acoes-detalhe">
+      <div style="display:flex;gap:8px;margin-bottom:2px">
+        <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
+        <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
+      </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
@@ -589,6 +606,17 @@
   </div>
 </div>
 
+<!-- ══ BARRA DE FILA DE IMPRESSÃO ══ -->
+<div id="fila-bar">
+  <div>
+    <div id="fila-bar-info">🖨️ Fila: <span id="fila-count">0</span> item(ns)</div>
+    <div id="fila-bar-sub"></div>
+  </div>
+  <button class="btn-imprimir-g" onclick="imprimirFila('G')">Impr. G</button>
+  <button class="btn-imprimir-p" onclick="imprimirFila('P')">Impr. P</button>
+  <button class="btn-limpar-fila" onclick="limparFila()">✕ Limpar</button>
+</div>
+
 <script src="config.js"></script>
 <script>
 // ══════════════════════════════════════════════════════
@@ -602,6 +630,7 @@ let _itemAtual  = null; // insumo ou PA aberto no detalhe
 let _opAtual    = null; // OP selecionada para pagamento
 let _movTipo    = '';   // 'ENTRADA' | 'SAIDA'
 let _contextoInsumos = null; // contexto para gravar insumos após confirmação
+let _filaImpressao   = [];   // [{ codigo, tipo:'insumo'|'pa' }]
 
 // ══════════════════════════════════════════════════════
 //  API
@@ -768,30 +797,30 @@ function filtrarInsumos(t) {
 }
 
 // ══════════════════════════════════════════════════════
-//  FOTO — carregamento lazy
+//  FOTO — carrega direto da URL pública do Drive
+//  Formato suportado: https://drive.google.com/thumbnail?sz=w1000&id=...
 // ══════════════════════════════════════════════════════
-async function _carregarFoto(fotoId, wrapId, placeholderId, emoji) {
+function _carregarFoto(fotoUrl, wrapId, placeholderId, emoji) {
   const wrap        = document.getElementById(wrapId);
   const placeholder = document.getElementById(placeholderId);
   if (!placeholder) return;
-  if (!fotoId || !String(fotoId).trim()) {
+  if (!fotoUrl || !String(fotoUrl).trim()) {
     placeholder.textContent = emoji;
     return;
   }
-  // Spinner enquanto busca
-  placeholder.innerHTML = `<span class="spinner" style="border-top-color:var(--accent);width:22px;height:22px;border-width:2px"></span>`;
-  try {
-    const res = await api('buscarFoto', { fotoId });
-    if (res?.ok && res.dataUrl) {
-      const img     = document.createElement('img');
-      img.src       = res.dataUrl;
-      img.className = 'detalhe-foto';
-      img.alt       = 'Foto do produto';
-      if (placeholder.parentNode) placeholder.parentNode.replaceChild(img, placeholder);
-    } else {
-      placeholder.textContent = emoji;
-    }
-  } catch { placeholder.textContent = emoji; }
+  const url = String(fotoUrl).trim();
+  // Cria a imagem e tenta carregar direto
+  const img     = document.createElement('img');
+  img.className = 'detalhe-foto';
+  img.alt       = 'Foto do produto';
+  img.style.opacity = '0';
+  img.style.transition = 'opacity .3s';
+  img.onload  = () => {
+    img.style.opacity = '1';
+    if (placeholder.parentNode) placeholder.parentNode.replaceChild(img, placeholder);
+  };
+  img.onerror = () => { placeholder.textContent = emoji; };
+  img.src = url;
 }
 
 // ══════════════════════════════════════════════════════
@@ -1343,6 +1372,78 @@ async function confirmarGravarInsumos() {
     setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; }, 1800);
   } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
   finally { setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  FILA DE IMPRESSÃO
+// ══════════════════════════════════════════════════════
+function adicionarFila(layout) {
+  if (!_itemAtual) return;
+  const tipo   = _itemAtual._tipo; // 'insumo' | 'pa'
+  const codigo = _itemAtual.codigo;
+  // Evita duplicata do mesmo layout
+  const jaExiste = _filaImpressao.find(i => i.codigo === codigo && i.layout === layout);
+  if (jaExiste) { toast(`"${codigo}" (${layout}) já está na fila`, 'warn'); return; }
+  _filaImpressao.push({ codigo, tipo, layout });
+  _atualizarBarraFila();
+  toast(`✔ ${codigo} adicionado à fila (${layout})`);
+}
+
+function _atualizarBarraFila() {
+  const barra = document.getElementById('fila-bar');
+  const count = document.getElementById('fila-count');
+  const sub   = document.getElementById('fila-bar-sub');
+  if (!_filaImpressao.length) {
+    barra.classList.remove('visible');
+    return;
+  }
+  barra.classList.add('visible');
+  count.textContent = _filaImpressao.length;
+  const g = _filaImpressao.filter(i => i.layout === 'G').length;
+  const p = _filaImpressao.filter(i => i.layout === 'P').length;
+  sub.textContent = `${g} grande(s) · ${p} grade(s)`;
+}
+
+function limparFila() {
+  _filaImpressao = [];
+  _atualizarBarraFila();
+  toast('Fila limpa');
+}
+
+async function imprimirFila(layout) {
+  const itens = _filaImpressao.filter(i => i.layout === layout);
+  if (!itens.length) { toast(`Nenhum item na fila para layout ${layout}`, 'warn'); return; }
+
+  const insItens = itens.filter(i => i.tipo === 'insumo').map(i => ({ codigo: i.codigo, layout }));
+  const paItens  = itens.filter(i => i.tipo === 'pa').map(i => ({ codigo: i.codigo, layout }));
+
+  const barra = document.getElementById('fila-bar');
+  barra.style.opacity = '.6';
+  toast(`⏳ Enviando ${itens.length} cartão(ns) para impressão...`, 'ok', 8000);
+
+  const promessas = [];
+  if (insItens.length) promessas.push(api('imprimirFilaCartaoInsumo', { lista: insItens }));
+  if (paItens.length)  promessas.push(api('imprimirFilaCartaoPA',     { lista: paItens  }));
+
+  try {
+    const resultados = await Promise.allSettled(promessas);
+    const erros = resultados
+      .filter(r => r.status === 'rejected' || !r.value?.ok)
+      .map(r => r.reason?.message || r.value?.mensagem || 'Erro desconhecido');
+
+    if (erros.length) {
+      toast('⚠️ ' + erros.join(' | '), 'err', 6000);
+    } else {
+      // Remove os impressos da fila
+      _filaImpressao = _filaImpressao.filter(i => i.layout !== layout);
+      _atualizarBarraFila();
+      toast(`✔ ${itens.length} cartão(ns) enviado(s) para impressão!`);
+    }
+  } catch(e) {
+    toast('Erro ao imprimir: ' + e.message, 'err');
+  } finally {
+    barra.style.opacity = '1';
+  }
 }
 
 // ══════════════════════════════════════════════════════
