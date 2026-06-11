@@ -902,15 +902,16 @@ function filtrarInsumos(t) {
 function _normalizarFotoUrl(url) {
   if (!url || !String(url).trim()) return '';
   const u = String(url).trim();
-  // Extrai o ID do formato thumbnail: ?id=XXX ou &id=XXX
-  const mId = u.match(/[?&]id=([\w-]+)/);
-  if (mId) return `https://drive.google.com/uc?export=view&id=${mId[1]}`;
-  // Já está no formato uc?export=view
-  if (u.includes('uc?export=view')) return u;
-  // Formato /file/d/ID/view
+  // Extrai o ID de qualquer formato Drive
+  let id = '';
+  const mId   = u.match(/[?&]id=([\w-]+)/);
   const mFile = u.match(/\/d\/([\w-]+)/);
-  if (mFile) return `https://drive.google.com/uc?export=view&id=${mFile[1]}`;
-  return u;
+  if (mId)   id = mId[1];
+  else if (mFile) id = mFile[1];
+  else if (/^[\w-]{25,}$/.test(u)) id = u; // ID puro
+  if (!id) return u;
+  // lh3.googleusercontent.com/d/ID — funciona publicamente sem bloqueio
+  return `https://lh3.googleusercontent.com/d/${id}`;
 }
 
 function _carregarFoto(fotoUrl, wrapId, placeholderId, emoji) {
