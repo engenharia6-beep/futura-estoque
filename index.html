@@ -166,7 +166,11 @@
     .dash-card.pa{border-color:rgba(15,110,86,.35);background:rgba(15,110,86,.08)}
     .dash-card.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
 
-    /* ── Detalhe ── */
+    /* ── Foto do produto no detalhe ── */
+    .detalhe-foto{width:72px;height:72px;border-radius:12px;object-fit:cover;flex-shrink:0;background:var(--bg);border:1px solid var(--border)}
+    .detalhe-foto-placeholder{width:72px;height:72px;border-radius:12px;flex-shrink:0;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px}
+    .detalhe-foto-wrap{position:relative;flex-shrink:0}
+    .detalhe-foto-wrap .spinner{position:absolute;inset:0;margin:auto;border-top-color:var(--accent)}
     .detalhe-header{padding:20px;display:flex;gap:16px;align-items:flex-start;border-bottom:1px solid var(--border)}
     .detalhe-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
     .detalhe-code{font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px}
@@ -330,7 +334,9 @@
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="detalhe-header">
-      <div class="item-card-icon insumo detalhe-icon">📦</div>
+      <div class="detalhe-foto-wrap" id="det-ins-foto-wrap">
+        <div class="detalhe-foto-placeholder" id="det-ins-foto-placeholder">📦</div>
+      </div>
       <div>
         <div class="detalhe-code" id="det-ins-codigo"></div>
         <div class="detalhe-name" id="det-ins-nome"></div>
@@ -388,7 +394,9 @@
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="detalhe-header">
-      <div class="item-card-icon pa detalhe-icon">🏭</div>
+      <div class="detalhe-foto-wrap" id="det-pa-foto-wrap">
+        <div class="detalhe-foto-placeholder" id="det-pa-foto-placeholder">🏭</div>
+      </div>
       <div>
         <div class="detalhe-code" id="det-pa-codigo"></div>
         <div class="detalhe-name" id="det-pa-nome"></div>
@@ -760,6 +768,33 @@ function filtrarInsumos(t) {
 }
 
 // ══════════════════════════════════════════════════════
+//  FOTO — carregamento lazy
+// ══════════════════════════════════════════════════════
+async function _carregarFoto(fotoId, wrapId, placeholderId, emoji) {
+  const wrap        = document.getElementById(wrapId);
+  const placeholder = document.getElementById(placeholderId);
+  if (!placeholder) return;
+  if (!fotoId || !String(fotoId).trim()) {
+    placeholder.textContent = emoji;
+    return;
+  }
+  // Spinner enquanto busca
+  placeholder.innerHTML = `<span class="spinner" style="border-top-color:var(--accent);width:22px;height:22px;border-width:2px"></span>`;
+  try {
+    const res = await api('buscarFoto', { fotoId });
+    if (res?.ok && res.dataUrl) {
+      const img     = document.createElement('img');
+      img.src       = res.dataUrl;
+      img.className = 'detalhe-foto';
+      img.alt       = 'Foto do produto';
+      if (placeholder.parentNode) placeholder.parentNode.replaceChild(img, placeholder);
+    } else {
+      placeholder.textContent = emoji;
+    }
+  } catch { placeholder.textContent = emoji; }
+}
+
+// ══════════════════════════════════════════════════════
 //  INSUMO — detalhe
 // ══════════════════════════════════════════════════════
 async function abrirDetalheInsumo(codigo) {
@@ -771,7 +806,12 @@ async function abrirDetalheInsumo(codigo) {
   document.getElementById('det-ins-meta').textContent   = [it.tipo, it.unidade].filter(Boolean).join(' · ');
   document.getElementById('det-ins-saldo').textContent  = '…';
   document.getElementById('det-ins-enderecos').innerHTML = '<div style="padding:8px 0;color:var(--text-muted);font-size:13px">Carregando endereços...</div>';
+  // Reseta placeholder antes de abrir
+  const wrap = document.getElementById('det-ins-foto-wrap');
+  if (wrap) wrap.innerHTML = `<div class="detalhe-foto-placeholder" id="det-ins-foto-placeholder">📦</div>`;
   abrirModal('modal-insumo');
+  // Carrega foto e saldo em paralelo
+  _carregarFoto(it.fotoUrl, 'det-ins-foto-wrap', 'det-ins-foto-placeholder', '📦');
   try {
     const res = await api('obterEnderecosSaldo', { codigo });
     document.getElementById('det-ins-saldo').textContent = res.saldo ?? 0;
@@ -866,13 +906,16 @@ async function abrirDetalhePA(codigo) {
   document.getElementById('det-pa-saldo').textContent  = '…';
   document.getElementById('det-pa-enderecos').innerHTML  = '<div style="padding:8px;color:var(--text-muted);font-size:13px">Carregando...</div>';
   document.getElementById('det-pa-estrutura').innerHTML  = '<div style="padding:0 0 8px;color:var(--text-muted);font-size:13px">Carregando estrutura...</div>';
+  // Reseta placeholder antes de abrir
+  const wrap = document.getElementById('det-pa-foto-wrap');
+  if (wrap) wrap.innerHTML = `<div class="detalhe-foto-placeholder" id="det-pa-foto-placeholder">🏭</div>`;
   abrirModal('modal-pa');
-  // Carrega saldo+enderecos e estrutura em paralelo
+  // Foto, saldo e estrutura em paralelo
+  _carregarFoto(it.fotoUrl, 'det-pa-foto-wrap', 'det-pa-foto-placeholder', '🏭');
   const [resEnd, resEst] = await Promise.allSettled([
     api('obterEnderecosSaldoPA', { codigo }),
     api('listarEstruturaProduto', { codigoPA: codigo }),
   ]);
-  // Saldo + endereços
   if (resEnd.status === 'fulfilled') {
     const r = resEnd.value;
     document.getElementById('det-pa-saldo').textContent = r.saldo ?? 0;
@@ -881,7 +924,6 @@ async function abrirDetalhePA(codigo) {
       ? r.enderecos.map(e => `<div class="endereco-row"><span class="endereco-nome">📍 ${esc(e.endereco)}</span><span class="endereco-saldo">${e.saldo}</span></div>`).join('')
       : '<div style="padding:8px;color:var(--text-muted);font-size:13px">Sem estoque em endereços.</div>';
   } else { document.getElementById('det-pa-saldo').textContent = '?'; }
-  // Estrutura de insumos
   if (resEst.status === 'fulfilled' && resEst.value?.ok) {
     const itens = resEst.value.itens || [];
     const el    = document.getElementById('det-pa-estrutura');
