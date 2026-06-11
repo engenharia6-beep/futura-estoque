@@ -4,8 +4,8 @@
   "description": "Controle de insumos e produtos acabados",
   "start_url": "/index.html",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#1a73e8",
+  "background_color": "#f0f4f5",
+  "theme_color": "#1a5c5a",
   "orientation": "portrait-primary",
   "icons": [
     {
