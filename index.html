@@ -199,6 +199,17 @@
     .preview-tipo-entrada{color:var(--success)}
     .insumos-aviso{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--warning);line-height:1.5}
 
+    /* ── Tabela de insumos para confirmação ── */
+    .ins-confirm-header{display:grid;grid-template-columns:1fr 72px 72px 80px;gap:6px;padding:6px 14px;font-size:10px;font-weight:700;color:var(--text-label);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+    .ins-confirm-row{display:grid;grid-template-columns:1fr 72px 72px 80px;gap:6px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(51,65,85,.5)}
+    .ins-confirm-row.sem-saldo{background:rgba(239,68,68,.06)}
+    .ins-confirm-row.sem-saldo .ins-saldo{color:var(--danger)}
+    .ins-confirm-nome{font-size:12px;line-height:1.3;min-width:0}
+    .ins-confirm-codigo{font-size:10px;font-family:var(--mono);color:var(--text-muted)}
+    .ins-saldo{font-size:12px;font-family:var(--mono);text-align:center;color:var(--success)}
+    .ins-qtde-input{width:100%;height:32px;padding:0 8px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:var(--mono);text-align:center}
+    .ins-qtde-input.insuf{border-color:var(--danger);background:rgba(239,68,68,.08)}
+
     @media(min-width:600px){
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
@@ -516,14 +527,45 @@
         <input id="tri-qtde" type="number" min="0.01" step="0.01" placeholder="0" oninput="atualizarPreviewTriangular()">
       </div>
       <div id="tri-preview" class="preview-box" style="display:none"></div>
-      <div class="insumos-aviso">
-        ⚠️ Os insumos da <strong>Estrutura de Produtos</strong> do produto destino serão baixados automaticamente.
-      </div>
       <div id="tri-msg" class="msg"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modal-triangular')">Cancelar</button>
       <button class="btn btn-full" id="btn-confirmar-tri" style="background:#7c3aed;color:#fff" onclick="confirmarTriangular()">🔄 Confirmar Triangular</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: CONFIRMAÇÃO DE INSUMOS (Baixa PA + Triangular)
+══════════════════════════════════════════════════════ -->
+<div id="modal-insumos-confirm" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="ins-confirm-titulo">Baixa de Insumos</span>
+      <button onclick="fecharModal('modal-insumos-confirm')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body" style="padding-bottom:8px">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6" id="ins-confirm-resumo"></div>
+      <div id="ins-confirm-aviso" class="insumos-aviso" style="display:none"></div>
+    </div>
+    <!-- Tabela de insumos -->
+    <div class="ins-confirm-header">
+      <div>Insumo</div>
+      <div style="text-align:center">Saldo</div>
+      <div style="text-align:center">Necessário</div>
+      <div style="text-align:center">Baixar</div>
+    </div>
+    <div id="ins-confirm-lista"></div>
+    <div style="padding:14px 20px">
+      <div id="ins-confirm-msg" class="msg" style="margin-bottom:12px"></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" style="flex:1" onclick="fecharModal('modal-insumos-confirm')">Cancelar</button>
+        <button class="btn btn-primary" style="flex:2" id="btn-gravar-insumos" onclick="confirmarGravarInsumos()">
+          ✔ Confirmar e Gravar
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -540,6 +582,7 @@ let opsCache    = [];
 let _itemAtual  = null; // insumo ou PA aberto no detalhe
 let _opAtual    = null; // OP selecionada para pagamento
 let _movTipo    = '';   // 'ENTRADA' | 'SAIDA'
+let _contextoInsumos = null; // contexto para gravar insumos após confirmação
 
 // ══════════════════════════════════════════════════════
 //  API
@@ -866,30 +909,43 @@ async function confirmarMovimentoPA() {
   const obs  = document.getElementById('mov-pa-obs').value.trim();
   const msg  = document.getElementById('mov-pa-msg');
   if (!qtde || qtde <= 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
-  setBtn('btn-confirmar-mov-pa', true, '<span class="spinner"></span>');
-  try {
-    const res = await api('gravarMovimentoPA', {
-      codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
-      tipo: _movTipo, qtde, obs: obs || `${_movTipo} Manual`,
-      usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '',
-    });
-    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
-    let textoSucesso = '✔ Movimento PA registrado!';
-    if (_movTipo === 'SAIDA' && res.insumos) {
-      const { gravados, avisos } = res.insumos;
-      if (gravados > 0) textoSucesso += ` + ${gravados} insumo(s) baixado(s).`;
-      if (avisos?.length) {
-        mostrarMsg(msg, textoSucesso + '\n⚠️ ' + avisos.join(' | '), 'warn');
-        toast('✔ PA baixado com avisos de insumos', 'warn');
-        setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 2500);
-        return;
-      }
-    }
-    mostrarMsg(msg, textoSucesso, 'ok');
-    toast(textoSucesso);
-    setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 1500);
-  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-  finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
+
+  if (_movTipo === 'SAIDA') {
+    // Primeiro grava a saída do PA, depois abre modal de insumos
+    setBtn('btn-confirmar-mov-pa', true, '<span class="spinner"></span>');
+    try {
+      const res = await api('gravarMovimentoPA', {
+        codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
+        tipo: 'SAIDA', qtde, obs: obs || 'Baixa PA Manual',
+        usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '',
+      });
+      if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+      fecharModal('modal-mov-pa');
+      // Abre modal de insumos para confirmação
+      _contextoInsumos = {
+        codigoPA: _itemAtual.codigo, qtde, op: '',
+        usuario: USUARIO.nome || USUARIO.usuario,
+        origem: 'pa_manual',
+      };
+      await abrirModalInsumosConfirm(`Baixa PA: ${_itemAtual.codigo}`, qtde, _itemAtual.codigo, '');
+    } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+    finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
+  } else {
+    // Entrada: grava direto sem insumos
+    setBtn('btn-confirmar-mov-pa', true, '<span class="spinner"></span>');
+    try {
+      const res = await api('gravarMovimentoPA', {
+        codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
+        tipo: 'ENTRADA', qtde, obs: obs || 'Entrada PA Manual',
+        usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '',
+      });
+      if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+      mostrarMsg(msg, '✔ Entrada PA registrada!', 'ok');
+      toast('✔ Entrada PA registrada!');
+      setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 1500);
+    } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+    finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -981,16 +1037,15 @@ async function confirmarBaixaPAOp() {
       usuario: USUARIO.nome || USUARIO.usuario, qrcode: '',
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
-    let texto = `✔ PA baixado! (${qtde} un.)`;
-    if (res.insumos?.gravados > 0) texto += ` + ${res.insumos.gravados} insumo(s).`;
-    if (res.insumos?.avisos?.length) {
-      mostrarMsg(msg, texto + '\n⚠️ ' + res.insumos.avisos.join(' | '), 'warn');
-      toast('✔ Baixado com avisos', 'warn');
-    } else {
-      mostrarMsg(msg, texto, 'ok');
-      toast(texto);
-    }
-    setTimeout(() => { fecharModal('modal-baixa-pa-op'); carregarOPS(); carregarPA(); }, 1800);
+    fecharModal('modal-baixa-pa-op');
+    toast('✔ PA baixado! Carregando insumos...');
+    _contextoInsumos = {
+      codigoPA: _opAtual.codigo, qtde, op: _opAtual.op,
+      usuario: USUARIO.nome || USUARIO.usuario,
+      origem: 'op_pa',
+    };
+    await abrirModalInsumosConfirm(`Baixa PA via OP ${_opAtual.op}`, qtde, _opAtual.codigo, _opAtual.op);
+    carregarOPS(); carregarPA();
   } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
   finally { setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA'); }
 }
@@ -1032,7 +1087,7 @@ async function confirmarTriangular() {
   if (!codOrigem)       { mostrarMsg(msg, 'Informe o código de origem.', 'err'); return; }
   if (!qtde || qtde<=0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
   if (codOrigem === codDestino) { mostrarMsg(msg, 'Origem e destino não podem ser iguais.', 'err'); return; }
-  if (!confirm(`Confirmar Triangular da OP ${_opAtual.op}?\n\n1) ${codOrigem} → SAÍDA ${qtde}\n2) ${codDestino} → ENTRADA ${qtde}\n3) ${codDestino} → SAÍDA ${qtde}\n\nInsumos de ${codDestino} serão baixados automaticamente.`)) return;
+  if (!confirm(`Confirmar Triangular da OP ${_opAtual.op}?\n\n1) ${codOrigem} → SAÍDA ${qtde}\n2) ${codDestino} → ENTRADA ${qtde}\n3) ${codDestino} → SAÍDA ${qtde}`)) return;
   setBtn('btn-confirmar-tri', true, '<span class="spinner"></span>');
   try {
     const res = await api('pagarTriangular', {
@@ -1040,16 +1095,15 @@ async function confirmarTriangular() {
       usuario: USUARIO.nome || USUARIO.usuario,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
-    let texto = `✔ Triangular gravado! 3 movimentos registrados.`;
-    if (res.insumos?.gravados > 0) texto += ` + ${res.insumos.gravados} insumo(s) baixado(s).`;
-    if (res.insumos?.avisos?.length) {
-      mostrarMsg(msg, texto + '\n⚠️ ' + res.insumos.avisos.join(' | '), 'warn');
-      toast('✔ Triangular com avisos de insumos', 'warn');
-    } else {
-      mostrarMsg(msg, texto, 'ok');
-      toast(texto);
-    }
-    setTimeout(() => { fecharModal('modal-triangular'); carregarOPS(); carregarPA(); }, 2000);
+    fecharModal('modal-triangular');
+    toast('✔ Triangular gravado! Carregando insumos...');
+    _contextoInsumos = {
+      codigoPA: codDestino, qtde, op: _opAtual.op,
+      usuario: USUARIO.nome || USUARIO.usuario,
+      origem: 'triangular',
+    };
+    await abrirModalInsumosConfirm(`Triangular OP ${_opAtual.op} — Insumos de ${codDestino}`, qtde, codDestino, _opAtual.op);
+    carregarOPS(); carregarPA();
   } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
   finally { setBtn('btn-confirmar-tri', false, '🔄 Confirmar Triangular'); }
 }
@@ -1080,6 +1134,120 @@ async function carregarMovimentos() {
   } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAL DE CONFIRMAÇÃO DE INSUMOS
+// ══════════════════════════════════════════════════════
+async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
+  document.getElementById('ins-confirm-titulo').textContent = titulo;
+  document.getElementById('ins-confirm-resumo').innerHTML =
+    `<span style="color:var(--text-muted)">PA: </span><strong>${esc(codigoPA)}</strong>
+     &nbsp;·&nbsp;<span style="color:var(--text-muted)">Qtde baixada: </span><strong>${qtde}</strong>
+     ${op ? `&nbsp;·&nbsp;<span style="color:var(--text-muted)">OP: </span><strong>${esc(op)}</strong>` : ''}`;
+  document.getElementById('ins-confirm-aviso').style.display = 'none';
+  document.getElementById('ins-confirm-lista').innerHTML =
+    '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px"><span class="spinner" style="border-top-color:var(--accent)"></span> Carregando insumos...</div>';
+  document.getElementById('ins-confirm-msg').className = 'msg';
+  setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar');
+  abrirModal('modal-insumos-confirm');
+
+  try {
+    const res = await api('prepararBaixaInsumos', { codigoPA, qtde });
+    if (!res?.ok) {
+      document.getElementById('ins-confirm-lista').innerHTML =
+        `<div style="padding:16px;color:var(--danger);font-size:13px">⚠️ ${esc(res?.mensagem || 'Erro ao carregar.')}</div>`;
+      return;
+    }
+    if (!res.itens?.length) {
+      document.getElementById('ins-confirm-lista').innerHTML =
+        '<div style="padding:16px;color:var(--text-muted);font-size:13px">Nenhum insumo encontrado na Estrutura de Produtos.</div>';
+      if (res.aviso) {
+        const av = document.getElementById('ins-confirm-aviso');
+        av.textContent = res.aviso; av.style.display = 'block';
+      }
+      return;
+    }
+
+    const temInsuficiente = res.itens.some(i => !i.suficiente);
+    if (temInsuficiente) {
+      const av = document.getElementById('ins-confirm-aviso');
+      av.textContent = '⚠️ Itens em vermelho estão com saldo insuficiente. Você pode ajustar as quantidades ou confirmar assim mesmo.';
+      av.style.display = 'block';
+    }
+
+    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => `
+      <div class="ins-confirm-row ${!it.suficiente ? 'sem-saldo' : ''}">
+        <div class="ins-confirm-nome">
+          <div class="ins-confirm-codigo">${esc(it.codigoInsumo)}</div>
+          <div>${esc(it.descricao)}</div>
+        </div>
+        <div class="ins-saldo ${!it.suficiente ? '' : ''}">${it.saldoAtual}</div>
+        <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdeNecessaria}</div>
+        <input class="ins-qtde-input ${!it.suficiente ? 'insuf' : ''}"
+          id="ins-qtde-${idx}"
+          type="number" min="0" step="0.01"
+          value="${it.qtdeNecessaria}"
+          data-codigo="${esc(it.codigoInsumo)}"
+          data-descricao="${esc(it.descricao)}"
+          data-saldo="${it.saldoAtual}"
+          oninput="validarQtdeInsumo(this, ${it.saldoAtual})">
+      </div>`).join('');
+
+  } catch(e) {
+    document.getElementById('ins-confirm-lista').innerHTML =
+      `<div style="padding:16px;color:var(--danger);font-size:13px">Erro: ${esc(e.message)}</div>`;
+  }
+}
+
+function validarQtdeInsumo(input, saldoAtual) {
+  const val = parseFloat(input.value || 0);
+  input.classList.toggle('insuf', val > saldoAtual);
+}
+
+async function confirmarGravarInsumos() {
+  if (!_contextoInsumos) return;
+  const inputs = document.querySelectorAll('#ins-confirm-lista .ins-qtde-input');
+  const msg    = document.getElementById('ins-confirm-msg');
+  if (!inputs.length) { fecharModal('modal-insumos-confirm'); return; }
+
+  const itens = Array.from(inputs).map(inp => ({
+    codigoInsumo: inp.dataset.codigo,
+    descricao:    inp.dataset.descricao,
+    qtdeBaixar:   parseFloat(inp.value || 0),
+  })).filter(it => it.qtdeBaixar > 0);
+
+  if (!itens.length) {
+    mostrarMsg(msg, 'Nenhum item com quantidade para baixar.', 'warn');
+    return;
+  }
+
+  setBtn('btn-gravar-insumos', true, '<span class="spinner"></span> Gravando...');
+  try {
+    const res = await api('gravarBaixaInsumos', {
+      itens,
+      dadosBase: {
+        op:          _contextoInsumos.op          || '',
+        usuario:     _contextoInsumos.usuario      || '',
+        computer:    '',
+        localizacao: '',
+        ip:          '',
+      },
+    });
+
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao gravar.', 'err'); return; }
+
+    let texto = `✔ ${res.gravados} insumo(s) baixado(s)!`;
+    if (res.avisos?.length) {
+      mostrarMsg(msg, texto + '\n⚠️ ' + res.avisos.join(' | '), 'warn');
+      toast(texto + ' (com avisos)', 'warn');
+    } else {
+      mostrarMsg(msg, texto, 'ok');
+      toast(texto);
+    }
+    setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; }, 1800);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar'); }
 }
 
 // ══════════════════════════════════════════════════════
