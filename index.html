@@ -236,6 +236,29 @@
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
+    /* ── Estados das OPs ── */
+    .op-card-grid{display:grid;grid-template-columns:44px 58px 56px 44px 1fr auto auto;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:background var(--transition);-webkit-tap-highlight-color:transparent}
+    .op-card-grid:active{background:var(--bg-hover)}
+    .op-card-grid.pago{opacity:.55}
+    .op-card-grid.baixa{border-color:rgba(26,115,232,.4);background:rgba(26,115,232,.04)}
+    .op-col-foto{width:40px;height:40px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg);border:1px solid var(--border)}
+    .op-col-num{font-size:10px;font-family:var(--mono);color:var(--text-muted);line-height:1.4}
+    .op-col-num strong{display:block;font-size:12px;color:var(--text);font-weight:700}
+    .op-col-qtde{font-size:14px;font-weight:800;font-family:var(--mono);text-align:center;color:var(--text)}
+    .op-col-desc{min-width:0}
+    .op-col-desc .op-codigo{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .op-col-desc .op-descricao{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+    .op-col-desc .op-obs{font-size:10px;color:var(--text-label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .op-col-silk{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+    .btn-silk{height:24px;padding:0 7px;border-radius:4px;font-size:9px;font-weight:700;background:rgba(26,115,232,.2);color:#60a5fa;border:1px solid rgba(26,115,232,.3);white-space:nowrap}
+    .btn-silk-metal{background:rgba(100,116,139,.15);color:var(--text-muted);border-color:rgba(100,116,139,.25)}
+    .btn-pagar-op{height:30px;padding:0 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
+    .btn-pagar-op.aberta{background:var(--success);color:#fff}
+    .btn-pagar-op.baixa{background:var(--accent);color:#fff}
+    .btn-pagar-op.pago{background:transparent;color:var(--text-muted);border:1px solid var(--border);pointer-events:none}
+    .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 2px;font-size:11px;color:var(--text-muted)}
+    .refresh-progress{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+    .refresh-progress-inner{height:100%;background:var(--accent);border-radius:2px;transition:width 1s linear}
   </style>
 </head>
 <body>
@@ -309,7 +332,13 @@
     <!-- ══ OPS ══ -->
     <div id="page-ops" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-ops" type="search" placeholder="OP ou produto..." oninput="filtrarOPS(this.value)">
+        <input class="search-input" id="search-ops" type="search" placeholder="OP, pedido ou produto..." oninput="filtrarOPS(this.value)">
+      </div>
+      <div class="refresh-bar">
+        <span id="ops-count" style="font-weight:600"></span>
+        <div class="refresh-progress"><div class="refresh-progress-inner" id="refresh-bar-inner" style="width:100%"></div></div>
+        <span id="refresh-countdown">—</span>
+        <button style="background:transparent;color:var(--accent);font-size:12px;font-weight:600;padding:0 4px" onclick="recarregarOPSManual()">↻</button>
       </div>
       <div id="lista-ops" class="item-list">
         <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Carregando...</div></div>
@@ -1056,8 +1085,12 @@ async function confirmarMovimentoPA() {
 }
 
 // ══════════════════════════════════════════════════════
-//  OPS
+//  OPS — lista completa fiel ao sistema atual
 // ══════════════════════════════════════════════════════
+let _refreshTimer   = null;
+let _refreshSegundos= 0;
+const REFRESH_INTERVALO = 300; // 5 minutos
+
 async function carregarOPS() {
   const lista = document.getElementById('lista-ops');
   lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
@@ -1065,37 +1098,118 @@ async function carregarOPS() {
     const res = await api('listarOPS');
     opsCache  = Array.isArray(res) ? res : (res?.ops || []);
     renderOPS(opsCache);
-    const abertas = opsCache.filter(o => o.posicao !== 'PAGO').length;
+    const abertas = opsCache.filter(o => o.estado !== 'PAGO').length;
     document.getElementById('dash-ops').textContent = abertas;
+    _iniciarAutoRefresh();
   } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
 }
 
+function _iniciarAutoRefresh() {
+  clearInterval(_refreshTimer);
+  _refreshSegundos = REFRESH_INTERVALO;
+  _atualizarContadorRefresh();
+  _refreshTimer = setInterval(() => {
+    _refreshSegundos--;
+    _atualizarContadorRefresh();
+    if (_refreshSegundos <= 0) {
+      clearInterval(_refreshTimer);
+      carregarOPS();
+    }
+  }, 1000);
+}
+
+function _atualizarContadorRefresh() {
+  const el  = document.getElementById('refresh-countdown');
+  const bar = document.getElementById('refresh-bar-inner');
+  if (!el || !bar) return;
+  const m = Math.floor(_refreshSegundos / 60);
+  const s = _refreshSegundos % 60;
+  el.textContent  = `${m}:${String(s).padStart(2,'0')}`;
+  bar.style.width = `${(_refreshSegundos / REFRESH_INTERVALO) * 100}%`;
+}
+
+async function recarregarOPSManual() {
+  clearInterval(_refreshTimer);
+  await carregarOPS();
+}
+
 function renderOPS(ops) {
-  const lista   = document.getElementById('lista-ops');
-  const abertas = ops.filter(o => o.posicao !== 'PAGO');
-  if (!abertas.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP em aberto.</div></div>'; return; }
-  lista.innerHTML = abertas.map(op => {
+  const lista  = document.getElementById('lista-ops');
+  const termoAtual = document.getElementById('search-ops').value.trim().toLowerCase();
+  const filtradas  = termoAtual
+    ? ops.filter(o => _matchOPS(o, termoAtual.split(/\s+/).filter(Boolean)))
+    : ops;
+
+  const abertas = filtradas.filter(o => o.estado !== 'PAGO');
+  const pagas   = filtradas.filter(o => o.estado === 'PAGO');
+  const todas   = [...abertas, ...pagas]; // abertas primeiro
+
+  const countEl = document.getElementById('ops-count');
+  if (countEl) countEl.textContent = `${abertas.length} em aberto · ${pagas.length} pagas`;
+
+  if (!todas.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP encontrada.</div></div>';
+    return;
+  }
+
+  lista.innerHTML = todas.map(op => {
+    const estadoClass = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : '';
+    const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
+    const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
+
     const fotoHtml = op.fotoUrl
-      ? `<img src="${esc(op.fotoUrl)}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder '+(${op.isPA?'true':'false'}?'pa':'insumo'),textContent:${op.isPA?"'🏭'":"'📦'"}}))">` 
-      : `<div class="item-foto-placeholder ${op.isPA?'pa':'insumo'}">${op.isPA?'🏭':'📦'}</div>`;
+      ? `<img src="${esc(op.fotoUrl)}" style="width:100%;height:100%;object-fit:cover" alt="" onerror="this.style.display='none'">`
+      : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px">${op.isPA?'🏭':'📦'}</div>`;
+
     return `
-    <div class="item-card" onclick="abrirModalOP('${esc(op.op)}')">
-      ${fotoHtml}
-      <div class="item-card-body">
-        <div class="item-card-code">OP ${esc(op.op)}</div>
-        <div class="item-card-name">${esc(op.codigo)}</div>
-        <div class="item-card-meta">${esc(op.descricao)} · Qtde: <strong>${op.qtde}</strong></div>
+    <div class="op-card-grid ${estadoClass}" onclick="abrirModalOP('${esc(op.op)}')">
+      <div class="op-col-foto">${fotoHtml}</div>
+      <div class="op-col-num">
+        Pedido<strong>${esc(op.pedido||'—')}</strong>
+        OP<strong>${esc(op.op)}</strong>
       </div>
-      <span class="badge ${op.isPA?'badge-pa':'badge-insumo'}">${op.isPA?'PA':'BOM'}</span>
+      <div>
+        <span class="badge ${op.isPA?'badge-pa':'badge-insumo'}" style="display:block;text-align:center;margin-bottom:2px">${esc(op.origem||'—')}</span>
+      </div>
+      <div class="op-col-qtde">${op.qtde}</div>
+      <div class="op-col-desc">
+        <div class="op-codigo">${esc(op.codigo)}</div>
+        <div class="op-descricao">${esc(op.descricao)}</div>
+        ${op.obs ? `<div class="op-obs">📝 ${esc(op.obs)}</div>` : ''}
+      </div>
+      <div class="op-col-silk" onclick="event.stopPropagation()">
+        <button class="btn-silk" onclick="imprimirSilkOP('${esc(op.op)}','${esc(op.zpl)}')">🖨 OP</button>
+        <button class="btn-silk btn-silk-metal" onclick="imprimirSilkMetal('${esc(op.op)}','${esc(op.zpl)}')">🖨 Metal</button>
+      </div>
+      <div onclick="event.stopPropagation()">
+        <button class="btn-pagar-op ${btnClass}" onclick="${op.estado!=='PAGO'?`abrirModalOP('${esc(op.op)}')`:'void(0)'}">${btnLabel}</button>
+      </div>
     </div>`;
   }).join('');
 }
 
+function _matchOPS(op, termos) {
+  const haystack = [op.op, op.pedido, op.codigo, op.descricao, op.obs, op.origem]
+    .join(' ').toLowerCase();
+  return termos.every(t => haystack.includes(t));
+}
+
 function filtrarOPS(t) {
-  const ts = t.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  renderOPS(!ts.length ? opsCache : opsCache.filter(op => ts.every(x => op.op.toLowerCase().includes(x) || op.codigo.toLowerCase().includes(x) || (op.descricao||'').toLowerCase().includes(x))));
+  renderOPS(opsCache);
+}
+
+function imprimirSilkOP(op, zpl) {
+  if (!zpl) { toast('Sem ZPL para esta OP', 'warn'); return; }
+  api('imprimirZPL', { op, zpl })
+    .then(r => toast(r?.ok ? `✔ Etiqueta OP ${op} enviada!` : `⚠️ ${r?.mensagem}`, r?.ok ? 'ok' : 'err'))
+    .catch(e => toast('Erro: ' + e.message, 'err'));
+}
+
+function imprimirSilkMetal(op, zpl) {
+  // Reutiliza mesma impressora — ajuste se tiver impressora diferente para metal
+  imprimirSilkOP(op, zpl);
 }
 
 function abrirModalOP(opNum) {
