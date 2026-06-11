@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Estoque Futura">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <title>Controle de Estoque — Futura</title>
+
+  <style>
+    /* ══════════════════════════════════════════════════
+       TOKENS
+    ══════════════════════════════════════════════════ */
+    :root {
+      --bg:          #0f172a;
+      --bg-card:     #1e293b;
+      --bg-input:    #0f172a;
+      --border:      #334155;
+      --border-focus:#1a73e8;
+      --text:        #f1f5f9;
+      --text-muted:  #94a3b8;
+      --text-label:  #64748b;
+      --accent:      #1a73e8;
+      --accent-hover:#1558c0;
+      --success:     #22c55e;
+      --warning:     #f59e0b;
+      --danger:      #ef4444;
+      --pa:          #0f6e56;
+      --insumo:      #1a73e8;
+      --radius:      10px;
+      --radius-sm:   6px;
+      --shadow:      0 4px 24px rgba(0,0,0,.4);
+      --transition:  .18s ease;
+      --font:        'Inter', system-ui, -apple-system, sans-serif;
+      --mono:        'JetBrains Mono', 'Fira Code', monospace;
+      --header-h:    56px;
+      --nav-h:       60px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       RESET & BASE
+    ══════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; overflow: hidden;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    input, button, select, textarea { font-family: inherit; }
+    button { cursor: pointer; border: none; outline: none; }
+    a { color: var(--accent); text-decoration: none; }
+
+    /* ══════════════════════════════════════════════════
+       APP SHELL
+    ══════════════════════════════════════════════════ */
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    #header {
+      height: var(--header-h);
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 12px;
+      flex-shrink: 0;
+      display: none;
+    }
+    #header.visible { display: flex; }
+    #header-title {
+      flex: 1;
+      font-size: 15px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #header-user {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    #btn-logout {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 20px;
+      padding: 4px;
+      line-height: 1;
+      transition: color var(--transition);
+    }
+    #btn-logout:hover { color: var(--danger); }
+
+    /* ── Conteúdo principal ──────────────────────────── */
+    #content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── Bottom Nav ──────────────────────────────────── */
+    #bottom-nav {
+      height: var(--nav-h);
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      display: none;
+      flex-shrink: 0;
+    }
+    #bottom-nav.visible {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 6px 4px;
+      transition: color var(--transition);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-item .nav-icon { font-size: 20px; line-height: 1; }
+    .nav-item.active { color: var(--accent); }
+    .nav-item:active { opacity: .7; }
+
+    /* ══════════════════════════════════════════════════
+       TELAS (pages)
+    ══════════════════════════════════════════════════ */
+    .page {
+      display: none;
+      min-height: 100%;
+      padding-bottom: 16px;
+    }
+    .page.active { display: block; }
+
+    /* ══════════════════════════════════════════════════
+       LOGIN
+    ══════════════════════════════════════════════════ */
+    #page-login {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100%;
+      padding: 32px 24px;
+    }
+    #page-login.active { display: flex; }
+
+    .login-logo {
+      width: 64px;
+      height: 64px;
+      background: var(--accent);
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(26,115,232,.35);
+    }
+    .login-title {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .login-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    .login-form {
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       COMPONENTES REUTILIZÁVEIS
+    ══════════════════════════════════════════════════ */
+
+    /* ── Field ───────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-label);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .field input, .field select {
+      height: 46px;
+      padding: 0 14px;
+      background: var(--bg-input);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 15px;
+      transition: border-color var(--transition);
+      width: 100%;
+    }
+    .field input:focus, .field select:focus {
+      border-color: var(--border-focus);
+      outline: none;
+    }
+    .field input::placeholder { color: var(--text-label); }
+
+    /* ── Botões ──────────────────────────────────────── */
+    .btn {
+      height: 48px;
+      padding: 0 20px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      transition: background var(--transition), opacity var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn:active { opacity: .8; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1.5px solid var(--border); }
+    .btn-danger  { background: var(--danger); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-sm { height: 34px; font-size: 12px; padding: 0 12px; }
+    .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 50%; }
+
+    /* ── Mensagem de status ──────────────────────────── */
+    .msg {
+      font-size: 13px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      display: none;
+      line-height: 1.4;
+    }
+    .msg.show { display: block; }
+    .msg.ok   { background: rgba(34,197,94,.12); color: var(--success); border: 1px solid rgba(34,197,94,.25); }
+    .msg.err  { background: rgba(239,68,68,.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,.25); }
+    .msg.warn { background: rgba(245,158,11,.12); color: var(--warning); border: 1px solid rgba(245,158,11,.25); }
+
+    /* ── Card ────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    /* ── Section header ──────────────────────────────── */
+    .section-header {
+      padding: 16px 16px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+
+    /* ── Search bar ──────────────────────────────────── */
+    .search-wrap {
+      padding: 8px 16px 12px;
+    }
+    .search-input {
+      width: 100%;
+      height: 40px;
+      padding: 0 14px 0 38px;
+      background: var(--bg-card);
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      color: var(--text);
+      font-size: 14px;
+      transition: border-color var(--transition);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+    }
+    .search-input:focus { border-color: var(--border-focus); outline: none; }
+
+    /* ── Lista de itens ──────────────────────────────── */
+    .item-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
+    .item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .item-card:active { background: #263550; }
+    .item-card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .item-card-icon.insumo { background: rgba(26,115,232,.15); }
+    .item-card-icon.pa     { background: rgba(15,110,86,.15); }
+    .item-card-body { flex: 1; min-width: 0; }
+    .item-card-code {
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+    .item-card-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-card-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .saldo-badge {
+      font-size: 14px;
+      font-weight: 700;
+      font-family: var(--mono);
+      flex-shrink: 0;
+      text-align: right;
+    }
+    .saldo-badge.ok   { color: var(--success); }
+    .saldo-badge.low  { color: var(--warning); }
+    .saldo-badge.zero { color: var(--danger); }
+
+    /* ── Badge de tipo ───────────────────────────────── */
+    .badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .badge-insumo { background: rgba(26,115,232,.2);  color: #60a5fa; }
+    .badge-pa     { background: rgba(15,110,86,.2);   color: #34d399; }
+    .badge-saida  { background: rgba(239,68,68,.15);  color: #f87171; }
+    .badge-entrada{ background: rgba(34,197,94,.15);  color: #4ade80; }
+
+    /* ── Spinner ─────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,.25);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ─────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state-text { font-size: 14px; }
+
+    /* ── Loading overlay ─────────────────────────────── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 9999;
+      transition: opacity .3s;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .loading-logo {
+      width: 56px;
+      height: 56px;
+      background: var(--accent);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+    }
+    .loading-text {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── Modal ───────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.65);
+      z-index: 1000;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-sheet {
+      background: var(--bg-card);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 600px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 0 0 32px;
+      animation: slideUp .25s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to   { transform: translateY(0); }
+    }
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+    .modal-header {
+      padding: 16px 20px 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-title {
+      flex: 1;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .modal-footer {
+      padding: 0 20px;
+      display: flex;
+      gap: 10px;
+    }
+    .modal-footer .btn { flex: 1; }
+
+    /* ── Toast ───────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: calc(var(--nav-h) + 12px);
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1e293b;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 18px;
+      border-radius: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      white-space: nowrap;
+      max-width: 90vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 2000;
+      box-shadow: var(--shadow);
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    #toast.ok   { border-color: rgba(34,197,94,.4);  color: var(--success); }
+    #toast.err  { border-color: rgba(239,68,68,.4);  color: var(--danger); }
+    #toast.warn { border-color: rgba(245,158,11,.4); color: var(--warning); }
+
+    /* ══════════════════════════════════════════════════
+       PÁGINA: DASHBOARD
+    ══════════════════════════════════════════════════ */
+    .dashboard-grid {
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .dash-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .dash-card-icon { font-size: 24px; }
+    .dash-card-value {
+      font-size: 26px;
+      font-weight: 800;
+      font-family: var(--mono);
+      color: var(--text);
+    }
+    .dash-card-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+    }
+    .dash-card.accent { border-color: rgba(26,115,232,.35); background: rgba(26,115,232,.08); }
+    .dash-card.pa     { border-color: rgba(15,110,86,.35);  background: rgba(15,110,86,.08); }
+
+    /* ══════════════════════════════════════════════════
+       RESPONSIVE — telas maiores (tablet/desktop)
+    ══════════════════════════════════════════════════ */
+    @media (min-width: 600px) {
+      .modal-sheet { border-radius: 20px; margin: auto; max-height: 80vh; }
+      .modal-overlay { align-items: center; }
+      #bottom-nav.visible { display: none; }
+      #sidebar {
+        display: flex;
+        flex-direction: column;
+        width: 220px;
+        background: var(--bg-card);
+        border-right: 1px solid var(--border);
+        height: 100%;
+        flex-shrink: 0;
+      }
+      #main-area {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+    }
+  </style>
+
+  <!-- Fontes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- Loading splash -->
+<div id="loading-overlay">
+  <div class="loading-logo">📦</div>
+  <div class="spinner"></div>
+  <div class="loading-text">Carregando...</div>
+</div>
+
+<!-- Toast global -->
+<div id="toast"></div>
+
+<div id="app">
+
+  <!-- Header -->
+  <header id="header">
+    <span id="header-title">Controle de Estoque</span>
+    <span id="header-user"></span>
+    <button id="btn-logout" title="Sair" onclick="logout()">⏻</button>
+  </header>
+
+  <!-- Conteúdo -->
+  <div id="content">
+
+    <!-- ══ LOGIN ══ -->
+    <div id="page-login" class="page active">
+      <div class="login-logo">📦</div>
+      <div class="login-title">Controle de Estoque</div>
+      <div class="login-subtitle">Futura</div>
+      <div class="login-form">
+        <div class="field">
+          <label>Usuário</label>
+          <input id="login-user" type="text" placeholder="seu.usuario"
+            autocomplete="username" autocapitalize="none" spellcheck="false">
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input id="login-pass" type="password" placeholder="••••••••"
+            autocomplete="current-password">
+        </div>
+        <div id="login-msg" class="msg"></div>
+        <button id="btn-login" class="btn btn-primary" onclick="fazerLogin()">
+          Entrar
+        </button>
+      </div>
+    </div>
+
+    <!-- ══ DASHBOARD ══ -->
+    <div id="page-dashboard" class="page">
+      <div class="section-header">
+        <span class="section-title">Resumo</span>
+      </div>
+      <div class="dashboard-grid">
+        <div class="dash-card accent">
+          <div class="dash-card-icon">📦</div>
+          <div class="dash-card-value" id="dash-total-insumos">—</div>
+          <div class="dash-card-label">Insumos ativos</div>
+        </div>
+        <div class="dash-card pa">
+          <div class="dash-card-icon">🏭</div>
+          <div class="dash-card-value" id="dash-total-pa">—</div>
+          <div class="dash-card-label">PAs ativos</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-icon">⚠️</div>
+          <div class="dash-card-value" id="dash-criticos" style="color:var(--warning)">—</div>
+          <div class="dash-card-label">Estoque crítico</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-icon">📋</div>
+          <div class="dash-card-value" id="dash-ops">—</div>
+          <div class="dash-card-label">OPs abertas</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ INSUMOS ══ -->
+    <div id="page-insumos" class="page">
+      <div class="search-wrap">
+        <input class="search-input" id="search-insumos" type="search"
+          placeholder="Buscar por código ou descrição..."
+          oninput="filtrarInsumos(this.value)">
+      </div>
+      <div id="lista-insumos" class="item-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📦</div>
+          <div class="empty-state-text">Carregando insumos...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ PA ══ -->
+    <div id="page-pa" class="page">
+      <div class="search-wrap">
+        <input class="search-input" id="search-pa" type="search"
+          placeholder="Buscar por código ou descrição..."
+          oninput="filtrarPA(this.value)">
+      </div>
+      <div id="lista-pa" class="item-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">🏭</div>
+          <div class="empty-state-text">Carregando produtos acabados...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ OPS ══ -->
+    <div id="page-ops" class="page">
+      <div class="search-wrap">
+        <input class="search-input" id="search-ops" type="search"
+          placeholder="Buscar OP ou produto..."
+          oninput="filtrarOPS(this.value)">
+      </div>
+      <div id="lista-ops" class="item-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-text">Carregando ordens de produção...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MOVIMENTOS ══ -->
+    <div id="page-movimentos" class="page">
+      <div class="section-header">
+        <span class="section-title">Últimos movimentos</span>
+        <select id="filtro-mov-tipo" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;" onchange="carregarMovimentos()">
+          <option value="todos">Todos</option>
+          <option value="insumo">Insumos</option>
+          <option value="pa">PA</option>
+        </select>
+      </div>
+      <div id="lista-movimentos" class="item-list">
+        <div class="empty-state">
+          <div class="empty-state-icon">🔄</div>
+          <div class="empty-state-text">Carregando movimentos...</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Bottom Nav -->
+  <nav id="bottom-nav">
+    <button class="nav-item active" data-page="dashboard" onclick="navegar('dashboard')">
+      <span class="nav-icon">🏠</span>
+      <span>Início</span>
+    </button>
+    <button class="nav-item" data-page="insumos" onclick="navegar('insumos')">
+      <span class="nav-icon">📦</span>
+      <span>Insumos</span>
+    </button>
+    <button class="nav-item" data-page="pa" onclick="navegar('pa')">
+      <span class="nav-icon">🏭</span>
+      <span>PA</span>
+    </button>
+    <button class="nav-item" data-page="ops" onclick="navegar('ops')">
+      <span class="nav-icon">📋</span>
+      <span>OPs</span>
+    </button>
+    <button class="nav-item" data-page="movimentos" onclick="navegar('movimentos')">
+      <span class="nav-icon">🔄</span>
+      <span>Movimentos</span>
+    </button>
+  </nav>
+
+</div><!-- /app -->
+
+<!-- Scripts -->
+<script src="config.js"></script>
+<script>
+
+// ══════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════════════
+let USUARIO      = null;
+let insumoCache  = [];
+let paCache      = [];
+let opsCache     = [];
+
+// ══════════════════════════════════════════════════════
+//  API — fetch centralizado para o GAS
+// ══════════════════════════════════════════════════════
+async function api(acao, dados = {}) {
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
+  try {
+    const res = await fetch(CONFIG.GAS_URL, {
+      method:  'POST',
+      signal:  controller.signal,
+      headers: { 'Content-Type': 'text/plain' }, // evita preflight CORS
+      body:    JSON.stringify({ acao, dados }),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Tempo esgotado. Verifique a conexão.');
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════
+let _toastTimer;
+function toast(msg, tipo = 'ok', duracao = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className   = 'show ' + tipo;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.className = ''; }, duracao);
+}
+
+// ══════════════════════════════════════════════════════
+//  NAVEGAÇÃO
+// ══════════════════════════════════════════════════════
+function navegar(pagina) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + pagina)?.classList.add('active');
+  document.querySelector(`.nav-item[data-page="${pagina}"]`)?.classList.add('active');
+  document.getElementById('header-title').textContent = {
+    dashboard:  'Controle de Estoque',
+    insumos:    'Insumos',
+    pa:         'Produtos Acabados',
+    ops:        'Ordens de Produção',
+    movimentos: 'Movimentos',
+  }[pagina] || 'Controle de Estoque';
+
+  // Carrega dados ao navegar
+  if (pagina === 'insumos'    && !insumoCache.length) carregarInsumos();
+  if (pagina === 'pa'         && !paCache.length)     carregarPA();
+  if (pagina === 'ops')                               carregarOPS();
+  if (pagina === 'movimentos')                        carregarMovimentos();
+  if (pagina === 'dashboard')                         carregarDashboard();
+}
+
+// ══════════════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════════════
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') fazerLogin();
+});
+
+async function fazerLogin() {
+  const usuario = document.getElementById('login-user').value.trim();
+  const senha   = document.getElementById('login-pass').value;
+  const msg     = document.getElementById('login-msg');
+  const btn     = document.getElementById('btn-login');
+
+  if (!usuario || !senha) {
+    mostrarMsg(msg, 'Preencha usuário e senha.', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  msg.className = 'msg';
+
+  try {
+    const res = await api('autenticar', { usuario, senha });
+    if (!res?.ok) {
+      mostrarMsg(msg, res?.mensagem || 'Usuário ou senha inválidos.', 'err');
+      return;
+    }
+    USUARIO = res.usuario;
+    sessionStorage.setItem('usuario', JSON.stringify(USUARIO));
+    entrarNoApp();
+  } catch (e) {
+    mostrarMsg(msg, 'Erro de conexão: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Entrar';
+  }
+}
+
+function entrarNoApp() {
+  document.getElementById('header').classList.add('visible');
+  document.getElementById('bottom-nav').classList.add('visible');
+  document.getElementById('header-user').textContent = USUARIO.nome || USUARIO.usuario;
+  document.getElementById('page-login').classList.remove('active');
+  navegar('dashboard');
+}
+
+function logout() {
+  if (!confirm('Deseja sair?')) return;
+  USUARIO = null;
+  insumoCache = []; paCache = []; opsCache = [];
+  sessionStorage.clear();
+  document.getElementById('header').classList.remove('visible');
+  document.getElementById('bottom-nav').classList.remove('visible');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-login').classList.add('active');
+  document.getElementById('login-pass').value = '';
+}
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function mostrarMsg(el, texto, tipo) {
+  el.textContent = texto;
+  el.className   = 'msg show ' + tipo;
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function saldoClass(saldo, min) {
+  if (saldo <= 0)        return 'zero';
+  if (saldo <= (min||0)) return 'low';
+  return 'ok';
+}
+
+// ══════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════
+async function carregarDashboard() {
+  if (!insumoCache.length) await carregarInsumos(true);
+  if (!paCache.length)     await carregarPA(true);
+
+  document.getElementById('dash-total-insumos').textContent = insumoCache.length;
+  document.getElementById('dash-total-pa').textContent      = paCache.length;
+
+  const criticos = insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin || 0)).length;
+  document.getElementById('dash-criticos').textContent = criticos;
+}
+
+// ══════════════════════════════════════════════════════
+//  INSUMOS
+// ══════════════════════════════════════════════════════
+async function carregarInsumos(silencioso = false) {
+  const lista = document.getElementById('lista-insumos');
+  if (!silencioso) lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
+  try {
+    const res = await api('listarCadastro');
+    insumoCache = Array.isArray(res) ? res : (res?.itens || []);
+    renderInsumos(insumoCache);
+  } catch (e) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
+  }
+}
+
+function renderInsumos(itens) {
+  const lista = document.getElementById('lista-insumos');
+  if (!itens.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Nenhum insumo encontrado.</div></div>';
+    return;
+  }
+  lista.innerHTML = itens.map(it => `
+    <div class="item-card" onclick="abrirDetalheInsumo('${esc(it.codigo)}')">
+      <div class="item-card-icon insumo">📦</div>
+      <div class="item-card-body">
+        <div class="item-card-code">${esc(it.codigo)}</div>
+        <div class="item-card-name">${esc(it.descricao)}</div>
+        <div class="item-card-meta">${esc(it.tipo||'')} ${it.endereco ? '· '+esc(it.endereco) : ''}</div>
+      </div>
+      <div class="saldo-badge ${saldoClass(it.estoqueAtual, it.estoqueMin)}">${it.estoqueAtual}</div>
+    </div>
+  `).join('');
+}
+
+function filtrarInsumos(termo) {
+  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!termos.length) { renderInsumos(insumoCache); return; }
+  const filtrados = insumoCache.filter(it =>
+    termos.every(t =>
+      it.codigo.toLowerCase().includes(t) ||
+      it.descricao.toLowerCase().includes(t)
+    )
+  );
+  renderInsumos(filtrados);
+}
+
+// ══════════════════════════════════════════════════════
+//  PA
+// ══════════════════════════════════════════════════════
+async function carregarPA(silencioso = false) {
+  const lista = document.getElementById('lista-pa');
+  if (!silencioso) lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
+  try {
+    const res = await api('listarCadastroPA');
+    paCache = Array.isArray(res) ? res : (res?.itens || []);
+    renderPA(paCache);
+  } catch (e) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
+  }
+}
+
+function renderPA(itens) {
+  const lista = document.getElementById('lista-pa');
+  if (!itens.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Nenhum PA encontrado.</div></div>';
+    return;
+  }
+  lista.innerHTML = itens.map(it => `
+    <div class="item-card" onclick="abrirDetalhePA('${esc(it.codigo)}')">
+      <div class="item-card-icon pa">🏭</div>
+      <div class="item-card-body">
+        <div class="item-card-code">${esc(it.codigo)}</div>
+        <div class="item-card-name">${esc(it.descricao)}</div>
+        <div class="item-card-meta">${esc(it.familia||'')} ${it.endereco ? '· '+esc(it.endereco) : ''}</div>
+      </div>
+      <div class="saldo-badge ${saldoClass(it.estoqueAtual, it.estoqueMin)}">${it.estoqueAtual}</div>
+    </div>
+  `).join('');
+}
+
+function filtrarPA(termo) {
+  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!termos.length) { renderPA(paCache); return; }
+  const filtrados = paCache.filter(it =>
+    termos.every(t =>
+      it.codigo.toLowerCase().includes(t) ||
+      it.descricao.toLowerCase().includes(t)
+    )
+  );
+  renderPA(filtrados);
+}
+
+// ══════════════════════════════════════════════════════
+//  OPS
+// ══════════════════════════════════════════════════════
+async function carregarOPS() {
+  const lista = document.getElementById('lista-ops');
+  lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
+  try {
+    const res = await api('listarOPS');
+    opsCache = Array.isArray(res) ? res : (res?.ops || []);
+    renderOPS(opsCache);
+    document.getElementById('dash-ops').textContent =
+      opsCache.filter(o => o.posicao !== 'PAGO').length;
+  } catch (e) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
+  }
+}
+
+function renderOPS(ops) {
+  const lista = document.getElementById('lista-ops');
+  const abertas = ops.filter(o => o.posicao !== 'PAGO');
+  if (!abertas.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP em aberto.</div></div>';
+    return;
+  }
+  lista.innerHTML = abertas.map(op => `
+    <div class="item-card" onclick="abrirModalOP('${esc(op.op)}')">
+      <div class="item-card-icon ${op.isPA ? 'pa' : 'insumo'}">${op.isPA ? '🏭' : '📦'}</div>
+      <div class="item-card-body">
+        <div class="item-card-code">OP ${esc(op.op)}</div>
+        <div class="item-card-name">${esc(op.codigo)}</div>
+        <div class="item-card-meta">${esc(op.descricao)} · Qtde: ${op.qtde}</div>
+      </div>
+      <span class="badge ${op.isPA ? 'badge-pa' : 'badge-insumo'}">${op.isPA ? 'PA' : 'INS'}</span>
+    </div>
+  `).join('');
+}
+
+function filtrarOPS(termo) {
+  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!termos.length) { renderOPS(opsCache); return; }
+  const filtrados = opsCache.filter(op =>
+    termos.every(t =>
+      op.op.toLowerCase().includes(t) ||
+      op.codigo.toLowerCase().includes(t) ||
+      (op.descricao||'').toLowerCase().includes(t)
+    )
+  );
+  renderOPS(filtrados);
+}
+
+// ══════════════════════════════════════════════════════
+//  MOVIMENTOS
+// ══════════════════════════════════════════════════════
+async function carregarMovimentos() {
+  const lista = document.getElementById('lista-movimentos');
+  const tipo  = document.getElementById('filtro-mov-tipo').value;
+  lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
+  try {
+    const acao = tipo === 'pa' ? 'listarMovimentosPA' : tipo === 'insumo' ? 'listarMovimentos' : 'listarMovimentos';
+    const res  = await api(acao);
+    const movs = (Array.isArray(res) ? res : []).slice(-50).reverse(); // últimos 50
+    if (!movs.length) {
+      lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-text">Nenhum movimento encontrado.</div></div>';
+      return;
+    }
+    lista.innerHTML = movs.map(m => `
+      <div class="item-card">
+        <div class="item-card-body">
+          <div class="item-card-code">${esc(m.data)} ${m.op ? '· OP '+esc(m.op) : ''}</div>
+          <div class="item-card-name">${esc(m.codigo)} — ${esc(m.descricao)}</div>
+          <div class="item-card-meta">${esc(m.obs||'')} · ${esc(m.usuario||'')}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <span class="badge badge-${m.tipo?.toLowerCase()==='entrada'?'entrada':'saida'}">${esc(m.tipo)}</span>
+          <div class="saldo-badge ok" style="margin-top:4px">${m.qtde}</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  PLACEHOLDERS — expandir nas próximas iterações
+// ══════════════════════════════════════════════════════
+function abrirDetalheInsumo(codigo) {
+  toast('Detalhe de insumo — em breve: ' + codigo, 'warn');
+}
+function abrirDetalhePA(codigo) {
+  toast('Detalhe de PA — em breve: ' + codigo, 'warn');
+}
+function abrirModalOP(op) {
+  toast('Modal de OP — em breve: ' + op, 'warn');
+}
+
+// ══════════════════════════════════════════════════════
+//  PWA — Service Worker
+// ══════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// ══════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  // Tenta restaurar sessão
+  const saved = sessionStorage.getItem('usuario');
+  if (saved) {
+    try {
+      USUARIO = JSON.parse(saved);
+      entrarNoApp();
+    } catch { sessionStorage.clear(); }
+  }
+  // Remove loading splash
+  setTimeout(() => {
+    document.getElementById('loading-overlay').classList.add('hidden');
+  }, 400);
+});
+
+</script>
+</body>
+</html>
