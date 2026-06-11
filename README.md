@@ -159,3 +159,80 @@ Abra o link → compartilhar (□↑) → "Adicionar à Tela de Início"
 
 
 
+
+
+## Resumo do Estado Atual — 11/06/2026
+
+### 📁 Repositório
+**GitHub:** `engenharia6-beep/futura-estoque`
+**URL:** `https://engenharia6-beep.github.io/futura-estoque/`
+**PWA:** Instalável no Chrome ✅
+
+---
+
+### ✅ Funcionando
+
+**Infraestrutura**
+- PWA instalável, service worker v2 corrigido
+- Login com sessionStorage
+- Backend `Code_novo.gs` separado (zero impacto no sistema atual)
+- Comunicação `fetch() → doPost` no GAS
+
+**Telas**
+- Dashboard — resumo com insumos, PAs, críticos, OPs
+- Insumos — lista com busca, foto, detalhe, entrada/saída
+- PA — lista com busca, foto, detalhe, estrutura de insumos, entrada/saída
+- OPs — layout fiel ao sistema atual, linhas alternadas, separação por borda verde, botões Metal/OP/Pagar inline, auto-refresh 5min
+- Movimentos — listagem PA e Insumos com filtro
+
+**Modais**
+- Detalhe Insumo — foto banner, saldo, endereços
+- Detalhe PA — foto banner, saldo, estrutura de insumos
+- Pagar OP — escolha BOM / PA Direto / Triangular
+- BOM — lista com checkbox, saldo atual, quantidade ajustável
+- Baixa PA — com modal de confirmação de insumos
+- Triangular — preview em tempo real dos 3 movimentos
+- Confirmação de Insumos — checkbox por item, saldo, quantidade editável, avisos em vermelho
+
+**Impressão**
+- Etiqueta ZPL via botão no detalhe ✅
+- Fila Cartão G e P nos detalhes de Insumo e PA
+- Botões Metal e OP direto nas OPs ✅
+
+**Correção do problema original**
+- Baixa PA e Triangular agora abrem modal de confirmação de insumos
+- Insumos lidos da aba `Estrutura de Produtos`
+
+---
+
+### 🔄 Pendente
+
+| Item | Situação |
+|---|---|
+| Fotos 403 | Última tentativa: `lh3.googleusercontent.com/d/ID` — testar |
+| Modal BOM — baixa via insumos | Implementado, testar em produção |
+| Embarque / DI | Não iniciado |
+| Ícone PWA 512px | Usando 192px nos dois slots |
+| Favicon | 404 no repositório |
+
+---
+
+### 📌 Arquivos no repositório
+
+| Arquivo | Função |
+|---|---|
+| `index.html` | App completo — todas as telas e modais |
+| `Code_novo.gs` | Backend API REST — 34+ rotas |
+| `config.js` | URL do GAS |
+| `manifest.json` | PWA — aponta para `icon-192.png` na raiz |
+| `sw.js` | Service Worker v2 |
+| `icon-192.png` | Ícone do PWA (na raiz) |
+
+---
+
+### ⚠️ Lembretes técnicos
+
+- Após qualquer push, limpar cache no browser: `sessionStorage.clear(); caches.keys().then(k=>k.forEach(c=>caches.delete(c))); location.reload(true);`
+- O CSS do `modal-overlay` é crítico — não usar `sed` em blocos grandes do `index.html`
+- O service worker antigo trava tudo — sempre fazer Unregister antes de testar versão nova
+- Fotos do Drive precisam estar compartilhadas individualmente como públicas
