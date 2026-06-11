@@ -108,7 +108,7 @@
     .search-input{width:100%;height:40px;padding:0 14px 0 38px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:20px;color:var(--text);font-size:14px;transition:border-color var(--transition);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center}
     .search-input:focus{border-color:var(--border-focus);outline:none}
     .item-list{padding:0 16px;display:flex;flex-direction:column;gap:8px}
-    .item-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color var(--transition),background var(--transition);-webkit-tap-highlight-color:transparent}
+    .item-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color var(--transition),background var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.06)}
     .item-card:active{background:var(--bg-hover)}
     .item-card-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
     .item-card-icon.insumo{background:var(--ins-light)}
@@ -358,7 +358,7 @@
         <span id="ops-count" style="font-weight:600"></span>
         <div class="refresh-progress"><div class="refresh-progress-inner" id="refresh-bar-inner" style="width:100%"></div></div>
         <span id="refresh-countdown">—</span>
-        <button style="background:transparent;color:var(--accent);font-size:12px;font-weight:600;padding:0 4px" onclick="recarregarOPSManual()">↻</button>
+        <button id="btn-refresh-ops" style="background:transparent;color:#1a5c5a;font-size:14px;font-weight:700;padding:0 4px;border:none;cursor:pointer" onclick="recarregarOPSManual()">↻</button>
       </div>
       <div id="lista-ops" class="ops-lista" style="gap:0">
         <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Carregando...</div></div>
@@ -1112,8 +1112,12 @@ let _refreshSegundos= 0;
 const REFRESH_INTERVALO = 300; // 5 minutos
 
 async function carregarOPS(forcar = false) {
-  // Não recarrega se já tem dados e não foi forçado
-  if (opsCache.length && !forcar) { renderOPS(opsCache); return; }
+  // Se já tem cache e não forçou, só renderiza sem iniciar novo refresh
+  if (opsCache.length && !forcar) {
+    renderOPS(opsCache);
+    if (!_refreshTimer) _iniciarAutoRefresh();
+    return;
+  }
   const lista = document.getElementById('lista-ops');
   lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
   try {
@@ -1122,7 +1126,7 @@ async function carregarOPS(forcar = false) {
     renderOPS(opsCache);
     const abertas = opsCache.filter(o => o.estado !== 'PAGO').length;
     document.getElementById('dash-ops').textContent = abertas;
-    _iniciarAutoRefresh();
+    if (!_refreshTimer) _iniciarAutoRefresh();
   } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
@@ -1188,10 +1192,10 @@ function renderOPS(ops) {
       ? `<img src="${esc(op.fotoUrl)}" style="width:100%;height:100%;object-fit:contain" alt="" onerror="this.style.display='none'">`
       : `<span style="font-size:32px">${op.isPA?'🏭':'📦'}</span>`;
     return `
-    <div class="op-row ${parImpar} ${estadoClass}" onclick="abrirModalOP('${esc(op.op)}')">
+    <div class="op-row ${parImpar} ${estadoClass}" data-op="${esc(op.op)}">
       <div class="op-row-foto">${fotoHtml}</div>
       <div class="op-row-body">
-        <div class="op-row-top">
+        <div class="op-row-top" style="cursor:pointer">
           <div class="op-row-ids">
             <div class="rf"><span>Pedido: </span><b>${esc(op.pedido||'—')}</b></div>
             <div class="rf"><span>OP: </span><b>${esc(op.op)}</b></div>
@@ -1205,10 +1209,10 @@ function renderOPS(ops) {
             <div class="op-row-desc">${esc(op.descricao)}</div>
           </div>
         </div>
-        <div class="op-row-btns" onclick="event.stopPropagation()">
-          <button class="btn-silk btn-silk-metal" onclick="imprimirSilkOP('${esc(op.op)}','${esc(op.zpl)}')">🖨 Metal</button>
-          <button class="btn-silk" onclick="imprimirSilkOP('${esc(op.op)}','${esc(op.zpl)}')">🖨 OP</button>
-          <button class="btn-pagar-op ${btnClass}" onclick="${op.estado!=='PAGO'?`abrirModalOP('${esc(op.op)}')`:'void(0)'}">${btnLabel}</button>
+        <div class="op-row-btns">
+          <button class="btn-silk btn-silk-metal" data-acao="metal" data-zpl="${esc(op.zpl)}">🖨 Metal</button>
+          <button class="btn-silk" data-acao="op" data-zpl="${esc(op.zpl)}">🖨 OP</button>
+          <button class="btn-pagar-op ${btnClass}" data-acao="${op.estado!=='PAGO'?'pagar':''}">${btnLabel}</button>
           <div class="op-row-btns-right">
             ${op.obs  ? `<span class="op-obs-label">📝 ${esc(op.obs)}</span>` : ''}
             ${op.silk ? `<span class="op-silk-label">SILK: ${esc(op.silk)}</span>` : ''}
@@ -1217,6 +1221,30 @@ function renderOPS(ops) {
       </div>
     </div>`;
   }).join('');
+  _bindOPsClicks();
+}
+
+function _bindOPsClicks() {
+  const lista = document.getElementById('lista-ops');
+  if (!lista) return;
+  lista.onclick = (e) => {
+    const row = e.target.closest('.op-row');
+    if (!row) return;
+    const opNum = row.dataset.op;
+    const btn   = e.target.closest('button[data-acao]');
+    if (btn) {
+      e.stopPropagation();
+      const acao = btn.dataset.acao;
+      const zpl  = btn.dataset.zpl || '';
+      if (acao === 'metal' || acao === 'op') { imprimirSilkOP(opNum, zpl); return; }
+      if (acao === 'pagar') { abrirModalOP(opNum); return; }
+      return;
+    }
+    // Clique no corpo da linha → abre modal OP
+    if (e.target.closest('.op-row-top') || e.target.closest('.op-row-foto')) {
+      abrirModalOP(opNum);
+    }
+  };
 }
 
 function _matchOPS(op, termos) {
