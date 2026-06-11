@@ -366,6 +366,7 @@
       <div style="display:flex;gap:8px;margin-bottom:2px">
         <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
         <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
+        <button class="btn btn-full btn-sm" style="background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.4);height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700" onclick="imprimirZPLDetalhe()">🏷️ ZPL</button>
       </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
@@ -432,6 +433,7 @@
       <div style="display:flex;gap:8px;margin-bottom:2px">
         <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
         <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
+        <button class="btn btn-full btn-sm" style="background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.4);height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700" onclick="imprimirZPLDetalhe()">🏷️ ZPL</button>
       </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
@@ -483,10 +485,15 @@
       <button onclick="fecharModal('modal-op')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
     </div>
     <div class="modal-body">
-      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6">
-        <div><span style="color:var(--text-muted)">Produto: </span><strong id="op-codigo-info"></strong></div>
-        <div><span style="color:var(--text-muted)">Descrição: </span><span id="op-desc-info"></span></div>
-        <div><span style="color:var(--text-muted)">Quantidade: </span><strong id="op-qtde-info"></strong></div>
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6;display:flex;gap:12px;align-items:center">
+        <div id="op-modal-foto-wrap" style="width:56px;height:56px;border-radius:10px;overflow:hidden;flex-shrink:0;background:var(--bg-card);border:1px solid var(--border)">
+          <div id="op-modal-foto-ph" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">🏭</div>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div><span style="color:var(--text-muted)">Produto: </span><strong id="op-codigo-info"></strong></div>
+          <div><span style="color:var(--text-muted)">Descrição: </span><span id="op-desc-info" style="font-size:12px"></span></div>
+          <div><span style="color:var(--text-muted)">Quantidade: </span><strong id="op-qtde-info"></strong></div>
+        </div>
       </div>
       <div class="section-header" style="padding:0 0 8px"><span class="section-title">Como pagar?</span></div>
       <div class="op-tipo-cards">
@@ -1069,16 +1076,21 @@ function renderOPS(ops) {
   const lista   = document.getElementById('lista-ops');
   const abertas = ops.filter(o => o.posicao !== 'PAGO');
   if (!abertas.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP em aberto.</div></div>'; return; }
-  lista.innerHTML = abertas.map(op => `
+  lista.innerHTML = abertas.map(op => {
+    const fotoHtml = op.fotoUrl
+      ? `<img src="${esc(op.fotoUrl)}" class="item-foto" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-foto-placeholder '+(${op.isPA?'true':'false'}?'pa':'insumo'),textContent:${op.isPA?"'🏭'":"'📦'"}}))">` 
+      : `<div class="item-foto-placeholder ${op.isPA?'pa':'insumo'}">${op.isPA?'🏭':'📦'}</div>`;
+    return `
     <div class="item-card" onclick="abrirModalOP('${esc(op.op)}')">
-      <div class="item-card-icon ${op.isPA?'op-pa':'op-ins'}">${op.isPA?'🏭':'📦'}</div>
+      ${fotoHtml}
       <div class="item-card-body">
         <div class="item-card-code">OP ${esc(op.op)}</div>
         <div class="item-card-name">${esc(op.codigo)}</div>
         <div class="item-card-meta">${esc(op.descricao)} · Qtde: <strong>${op.qtde}</strong></div>
       </div>
       <span class="badge ${op.isPA?'badge-pa':'badge-insumo'}">${op.isPA?'PA':'BOM'}</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function filtrarOPS(t) {
@@ -1094,14 +1106,92 @@ function abrirModalOP(opNum) {
   document.getElementById('op-codigo-info').textContent = op.codigo;
   document.getElementById('op-desc-info').textContent   = op.descricao;
   document.getElementById('op-qtde-info').textContent   = op.qtde;
+  // Foto no modal
+  const wrap = document.getElementById('op-modal-foto-wrap');
+  if (wrap) {
+    wrap.innerHTML = `<div id="op-modal-foto-ph" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">${op.isPA?'🏭':'📦'}</div>`;
+    if (op.fotoUrl) _carregarFoto(op.fotoUrl, 'op-modal-foto-wrap', 'op-modal-foto-ph', op.isPA?'🏭':'📦');
+  }
   abrirModal('modal-op');
 }
 
-function escolherTipoPagamento(tipo) {
+async function escolherTipoPagamento(tipo) {
   fecharModal('modal-op');
-  if (tipo === 'bom')        { toast('Modal BOM — em breve', 'warn'); return; }
+  if (tipo === 'bom')        { await abrirModalBOM(); return; }
   if (tipo === 'pa')         { abrirBaixaPAOp(); return; }
   if (tipo === 'triangular') { abrirTriangular(); return; }
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAL BOM — reutiliza modal-insumos-confirm
+// ══════════════════════════════════════════════════════
+async function abrirModalBOM() {
+  if (!_opAtual) return;
+  const op = _opAtual;
+
+  document.getElementById('ins-confirm-titulo').textContent = `BOM — OP ${op.op}`;
+  document.getElementById('ins-confirm-resumo').innerHTML =
+    `<span style="color:var(--text-muted)">Produto: </span><strong>${esc(op.codigo)}</strong>
+     &nbsp;·&nbsp;<span style="color:var(--text-muted)">OP: </span><strong>${esc(op.op)}</strong>
+     &nbsp;·&nbsp;<span style="color:var(--text-muted)">Qtde: </span><strong>${op.qtde}</strong>`;
+  document.getElementById('ins-confirm-aviso').style.display = 'none';
+  document.getElementById('ins-confirm-lista').innerHTML =
+    '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px"><span class="spinner" style="border-top-color:var(--accent)"></span> Carregando BOM...</div>';
+  document.getElementById('ins-confirm-msg').className = 'msg';
+  document.getElementById('ins-selecionados-count').textContent = '';
+  document.getElementById('ins-chk-all').checked = true;
+  setBtn('btn-gravar-insumos', false, '✔ Confirmar Baixa BOM');
+
+  // Contexto especial para BOM
+  _contextoInsumos = { tipo: 'bom', op: op.op, usuario: USUARIO.nome || USUARIO.usuario };
+
+  abrirModal('modal-insumos-confirm');
+
+  try {
+    const res = await api('prepararBOMComSaldo', { op: op.op });
+    if (!res?.ok) {
+      document.getElementById('ins-confirm-lista').innerHTML =
+        `<div style="padding:16px;color:var(--danger);font-size:13px">⚠️ ${esc(res?.mensagem||'Erro ao carregar BOM.')}</div>`;
+      return;
+    }
+    if (!res.itens?.length) {
+      document.getElementById('ins-confirm-lista').innerHTML =
+        '<div style="padding:16px;color:var(--text-muted);font-size:13px">Nenhum item encontrado na BOM.</div>';
+      return;
+    }
+
+    const temInsuf = res.itens.some(i => !i.suficiente);
+    if (temInsuf) {
+      const av = document.getElementById('ins-confirm-aviso');
+      av.textContent = '⚠️ Itens em vermelho estão com saldo insuficiente. Você pode ajustar as quantidades ou confirmar assim mesmo.';
+      av.style.display = 'block';
+    }
+
+    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => `
+      <div class="ins-confirm-row ${!it.suficiente?'sem-saldo':''}" id="ins-row-${idx}">
+        <input type="checkbox" class="ins-chk ins-item-chk" id="ins-chk-${idx}"
+          checked data-idx="${idx}" onchange="toggleInsumoRow(${idx}, this.checked)">
+        <div class="ins-confirm-nome">
+          <div class="ins-confirm-codigo">${esc(it.codigo)} <span class="badge ${it.tipoMov==='PA'?'badge-pa':'badge-insumo'}">${esc(it.tipoMov||'INS')}</span></div>
+          <div>${esc(it.descricao)}</div>
+        </div>
+        <div class="ins-saldo">${it.saldoAtual}</div>
+        <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdBaixar}</div>
+        <input class="ins-qtde-input ${!it.suficiente?'insuf':''}"
+          id="ins-qtde-${idx}" type="number" min="0" step="0.01"
+          value="${it.qtdBaixar}"
+          data-codigo="${esc(it.codigo)}"
+          data-descricao="${esc(it.descricao)}"
+          data-tipomov="${esc(it.tipoMov||'INSUMO')}"
+          data-saldo="${it.saldoAtual}"
+          oninput="validarQtdeInsumo(this, ${it.saldoAtual})">
+      </div>`).join('');
+
+    atualizarContadorInsumos();
+  } catch(e) {
+    document.getElementById('ins-confirm-lista').innerHTML =
+      `<div style="padding:16px;color:var(--danger);font-size:13px">Erro: ${esc(e.message)}</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1357,7 +1447,7 @@ async function confirmarGravarInsumos() {
   if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
   const msg = document.getElementById('ins-confirm-msg');
   // Coleta apenas os itens MARCADOS com quantidade > 0
-  const itens = Array.from(document.querySelectorAll('.ins-item-chk'))
+  const itensSelecionados = Array.from(document.querySelectorAll('.ins-item-chk'))
     .filter(chk => chk.checked)
     .map(chk => {
       const idx   = chk.dataset.idx;
@@ -1365,6 +1455,7 @@ async function confirmarGravarInsumos() {
       return {
         codigoInsumo: input.dataset.codigo,
         descricao:    input.dataset.descricao,
+        tipoMov:      input.dataset.tipomov || 'INSUMO',
         qtdeBaixar:   parseFloat(input.value || 0),
       };
     })
@@ -1379,32 +1470,63 @@ async function confirmarGravarInsumos() {
   setBtn('btn-gravar-insumos', true, '<span class="spinner"></span> Gravando...');
   const chaveIdem = _gerarChave();
   try {
-    const res = await api('gravarBaixaInsumos', {
-      itens,
-      dadosBase: {
-        op:          _contextoInsumos.op       || '',
-        usuario:     _contextoInsumos.usuario   || '',
-        computer:    '', localizacao: '', ip:  '',
-        chaveIdem,
-      },
-    });
+    let res;
+    if (_contextoInsumos?.tipo === 'bom') {
+      // BOM — separa insumos e PA, usa baixarBOMComTipo
+      res = await api('baixarBOMComTipo', {
+        movimentos: itens.map(it => ({
+          codigo:    it.codigoInsumo,
+          descricao: it.descricao,
+          tipoMov:   it.tipoMov || 'INSUMO',
+          qtdBaixar: it.qtdeBaixar,
+        })),
+        dadosBase: { op: _contextoInsumos.op||'', usuario: _contextoInsumos.usuario||'', computer:'', localizacao:'', ip:'', chaveIdem },
+      });
+      if (res?.ok) {
+        const g = (res.gravados || 0);
+        res.gravados = g; // normaliza para msg abaixo
+      }
+    } else {
+      // PA / Triangular — todos são insumos
+      res = await api('gravarBaixaInsumos', {
+        itens,
+        dadosBase: { op: _contextoInsumos.op||'', usuario: _contextoInsumos.usuario||'', computer:'', localizacao:'', ip:'', chaveIdem },
+      });
+    }
 
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao gravar.', 'err'); return; }
 
-    let texto = `✔ ${res.gravados} insumo(s) baixado(s)!`;
-    if (res.avisos?.length) {
-      mostrarMsg(msg, texto + '\n⚠️ ' + res.avisos.join(' | '), 'warn');
+    const gravados = res.gravados || 0;
+    const avisos   = res.avisos  || [];
+    const texto    = `✔ ${gravados} movimento(s) gravado(s)!`;
+    if (avisos.length) {
+      mostrarMsg(msg, texto + '\n⚠️ ' + avisos.join(' | '), 'warn');
       toast(texto + ' (com avisos)', 'warn');
     } else {
       mostrarMsg(msg, texto, 'ok');
       toast(texto);
     }
-    setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; }, 1800);
+    setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; carregarOPS(); }, 1800);
   } catch(e) { mostrarMsg(msg, e.message, 'err'); }
   finally {
     _requisicaoEmAndamento = false;
     setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar');
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  IMPRESSÃO ZPL
+// ══════════════════════════════════════════════════════
+async function imprimirZPLDetalhe() {
+  if (!_itemAtual) return;
+  const acao  = _itemAtual._tipo === 'pa' ? 'imprimirZPLCadastroPA' : 'imprimirZPLCadastro';
+  const codigo= _itemAtual.codigo;
+  toast(`⏳ Enviando etiqueta ${codigo}...`, 'ok', 8000);
+  try {
+    const res = await api(acao, { codigo });
+    if (res?.ok) toast(`✔ Etiqueta ${codigo} enviada!`);
+    else         toast(`⚠️ ${res?.mensagem || 'Erro ao imprimir'}`, 'err');
+  } catch(e) { toast('Erro ZPL: ' + e.message, 'err'); }
 }
 
 // ══════════════════════════════════════════════════════
