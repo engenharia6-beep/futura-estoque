@@ -50,11 +50,19 @@
     .nav-item.active{color:var(--accent)}
     .nav-item:active{opacity:.7}
 
+    /* ── Login — overlay independente que cobre tudo ── */
+    #page-login{
+      position:fixed;inset:0;z-index:500;
+      background:var(--bg);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:32px 24px;
+      transition:opacity .25s;
+    }
+    #page-login.hidden{opacity:0;pointer-events:none}
+
     /* ── Pages ── */
     .page{display:none;min-height:100%;padding-bottom:16px}
     .page.active{display:block}
-    #page-login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:32px 24px}
-    #page-login.active{display:flex}
 
     /* ── Login ── */
     .login-logo{width:64px;height:64px;background:var(--accent);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(26,115,232,.35)}
@@ -206,6 +214,23 @@
 
 <div id="toast"></div>
 
+<!-- ══ LOGIN — fora do app, cobre tudo ══ -->
+<div id="page-login">
+  <div class="login-logo">📦</div>
+  <div class="login-title">Controle de Estoque</div>
+  <div class="login-subtitle">Futura</div>
+  <div class="login-form">
+    <div class="field"><label>Usuário</label>
+      <input id="login-user" type="text" placeholder="seu.usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
+    </div>
+    <div class="field"><label>Senha</label>
+      <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-msg" class="msg"></div>
+    <button id="btn-login" class="btn btn-primary" onclick="fazerLogin()">Entrar</button>
+  </div>
+</div>
+
 <div id="app">
   <header id="header">
     <span id="header-title">Controle de Estoque</span>
@@ -214,23 +239,6 @@
   </header>
 
   <div id="content">
-
-    <!-- ══ LOGIN ══ -->
-    <div id="page-login" class="page active">
-      <div class="login-logo">📦</div>
-      <div class="login-title">Controle de Estoque</div>
-      <div class="login-subtitle">Futura</div>
-      <div class="login-form">
-        <div class="field"><label>Usuário</label>
-          <input id="login-user" type="text" placeholder="seu.usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
-        </div>
-        <div class="field"><label>Senha</label>
-          <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
-        </div>
-        <div id="login-msg" class="msg"></div>
-        <button id="btn-login" class="btn btn-primary" onclick="fazerLogin()">Entrar</button>
-      </div>
-    </div>
 
     <!-- ══ DASHBOARD ══ -->
     <div id="page-dashboard" class="page">
@@ -615,10 +623,10 @@ async function fazerLogin() {
 }
 
 function entrarNoApp() {
+  document.getElementById('page-login').classList.add('hidden');
   document.getElementById('header').classList.add('visible');
   document.getElementById('bottom-nav').classList.add('visible');
   document.getElementById('header-user').textContent = USUARIO.nome || USUARIO.usuario;
-  document.getElementById('page-login').classList.remove('active');
   navegar('dashboard');
 }
 
@@ -629,8 +637,9 @@ function logout() {
   document.getElementById('header').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('visible');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-login').classList.add('active');
+  document.getElementById('page-login').classList.remove('hidden');
   document.getElementById('login-pass').value = '';
+  document.getElementById('login-msg').className = 'msg';
 }
 
 // ══════════════════════════════════════════════════════
@@ -1082,7 +1091,11 @@ if ('serviceWorker' in navigator) {
 
 window.addEventListener('DOMContentLoaded', () => {
   const saved = sessionStorage.getItem('usuario');
-  if (saved) { try { USUARIO = JSON.parse(saved); entrarNoApp(); } catch { sessionStorage.clear(); } }
+  if (saved) {
+    try { USUARIO = JSON.parse(saved); entrarNoApp(); }
+    catch { sessionStorage.clear(); }
+  }
+  // Se não tem sessão, o login já aparece (não tem .hidden por padrão)
   setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 400);
 });
 </script>
