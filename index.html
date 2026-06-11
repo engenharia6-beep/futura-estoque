@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#1a5c5a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Estoque Futura">
@@ -14,15 +14,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg:#0f172a; --bg-card:#1e293b; --bg-input:#0f172a; --bg-hover:#263550;
-      --border:#334155; --border-focus:#1a73e8;
-      --text:#f1f5f9; --text-muted:#94a3b8; --text-label:#64748b;
-      --accent:#1a73e8; --accent-hover:#1558c0;
-      --success:#22c55e; --warning:#f59e0b; --danger:#ef4444;
-      --pa:#0f6e56; --pa-light:rgba(15,110,86,.15);
-      --ins-light:rgba(26,115,232,.15);
+      --bg:#f0f4f5; --bg-card:#ffffff; --bg-input:#ffffff; --bg-hover:#e8f0f1;
+      --border:#c8d8da; --border-focus:#1a5c5a;
+      --text:#1a2e2e; --text-muted:#4a6a6a; --text-label:#7a9a9a;
+      --accent:#1a5c5a; --accent-hover:#154948;
+      --success:#16a34a; --warning:#d97706; --danger:#dc2626;
+      --pa:#0f6e56; --pa-light:rgba(15,110,86,.12);
+      --ins-light:rgba(26,92,90,.12);
       --radius:10px; --radius-sm:6px;
-      --shadow:0 4px 24px rgba(0,0,0,.4);
+      --shadow:0 2px 12px rgba(0,0,0,.08);
       --transition:.18s ease;
       --font:'Inter',system-ui,-apple-system,sans-serif;
       --mono:'JetBrains Mono','Fira Code',monospace;
@@ -36,18 +36,18 @@
 
     /* ── App shell ── */
     #app{height:100%;display:flex;flex-direction:column;overflow:hidden}
-    #header{height:var(--header-h);background:var(--bg-card);border-bottom:1px solid var(--border);display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
+    #header{height:var(--header-h);background:#1a5c5a;border-bottom:none;display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
     #header.visible{display:flex}
-    #header-title{flex:1;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #header-user{font-size:12px;color:var(--text-muted);white-space:nowrap}
-    #btn-logout{background:transparent;color:var(--text-muted);font-size:20px;padding:4px;line-height:1;transition:color var(--transition)}
-    #btn-logout:hover{color:var(--danger)}
+    #header-title{flex:1;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;text-transform:uppercase;letter-spacing:.08em}
+    #header-user{font-size:12px;color:rgba(255,255,255,.75);white-space:nowrap}
+    #btn-logout{background:transparent;color:rgba(255,255,255,.75);font-size:20px;padding:4px;line-height:1;transition:color var(--transition)}
+    #btn-logout:hover{color:#fff}
     #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
-    #bottom-nav{height:var(--nav-h);background:var(--bg-card);border-top:1px solid var(--border);display:none;flex-shrink:0}
+    #bottom-nav{height:var(--nav-h);background:#1a5c5a;border-top:none;display:none;flex-shrink:0;box-shadow:0 -2px 8px rgba(0,0,0,.12)}
     #bottom-nav.visible{display:grid;grid-template-columns:repeat(5,1fr)}
-    .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;color:var(--text-muted);font-size:10px;font-weight:500;padding:6px 4px;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
+    .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;color:rgba(255,255,255,.6);font-size:10px;font-weight:600;padding:6px 4px;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
     .nav-item .nav-icon{font-size:20px;line-height:1}
-    .nav-item.active{color:var(--accent)}
+    .nav-item.active{color:#fff}
     .nav-item:active{opacity:.7}
 
     /* ── Login — overlay independente que cobre tudo ── */
@@ -133,28 +133,28 @@
     .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted)}
     .empty-state-icon{font-size:40px;margin-bottom:12px}
     .empty-state-text{font-size:14px}
-    #loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;transition:opacity .3s}
-    #loading-overlay.hidden{opacity:0;pointer-events:none}
-    .loading-logo{width:56px;height:56px;background:var(--accent);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px}
 
-    /* ── Modal bottom-sheet ── */
-    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:flex-end;justify-content:center}
-    .modal-overlay.open{display:flex}
-    .modal-sheet{background:var(--bg-card);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;padding:0 0 32px;animation:slideUp .25s ease}
-    @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-    .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0}
-    .modal-header{padding:16px 20px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
-    .modal-title{flex:1;font-size:16px;font-weight:700}
-    .modal-body{padding:20px;display:flex;flex-direction:column;gap:16px}
-    .modal-footer{padding:0 20px;display:flex;gap:10px}
-    .modal-footer .btn{flex:1}
 
-    /* ── Toast ── */
-    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%) translateY(20px);background:#1e293b;border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;padding:10px 18px;border-radius:24px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;z-index:2000;box-shadow:var(--shadow)}
-    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-    #toast.ok{border-color:rgba(34,197,94,.4);color:var(--success)}
-    #toast.err{border-color:rgba(239,68,68,.4);color:var(--danger)}
-    #toast.warn{border-color:rgba(245,158,11,.4);color:var(--warning)}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     /* ── Dashboard ── */
     .dashboard-grid{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -236,43 +236,41 @@
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
-    /* ── Card OP — layout corrigido, borda nítida, alto contraste ── */
-    .op-card{background:#1e293b;border:2px solid #4b6080;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:12px}
-    .op-card:hover{border-color:#6b8aad}
-    .op-card:active{background:#263550}
-    .op-card.pago{opacity:.5;border-color:#2d3f52}
-    .op-card.baixa{border-color:#1a73e8;background:rgba(26,115,232,.06)}
-    /* Foto + conteúdo — align-items:stretch faz foto esticar junto com conteúdo */
+    /* ── Card OP — tema claro, borda nítida ── */
+    .op-card{background:#fff;border:2px solid #b0c8ca;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .op-card:hover{border-color:#1a5c5a;box-shadow:0 2px 10px rgba(26,92,90,.15)}
+    .op-card:active{background:#f5fafa}
+    .op-card.pago{opacity:.5;border-color:#d0dfe0}
+    .op-card.baixa{border-color:#1a5c5a;background:#f0fafa}
     .op-card-inner{display:flex;align-items:stretch}
-    .op-card-foto{width:110px;min-width:110px;background:#0f172a;display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;flex-shrink:0;border-right:2px solid #4b6080;padding:6px}
+    .op-card-foto{width:110px;min-width:110px;background:#f8fafa;display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;flex-shrink:0;border-right:2px solid #b0c8ca;padding:6px}
     .op-card-foto img{width:100%;height:100%;object-fit:contain}
     .op-card-content{flex:1;min-width:0;display:flex;flex-direction:column}
     .op-card-info{display:flex;flex:1}
-    .op-card-ids{padding:10px 14px;min-width:130px;width:130px;flex-shrink:0;border-right:1px solid #334155;display:flex;flex-direction:column;justify-content:center;gap:4px}
-    .op-field{font-size:12px;line-height:1.5;color:#e2e8f0}
-    .op-field span{color:#94a3b8;font-weight:400}
-    .op-field b{color:#f8fafc;font-weight:700}
+    .op-card-ids{padding:10px 14px;min-width:130px;width:130px;flex-shrink:0;border-right:1px solid #d8e8ea;display:flex;flex-direction:column;justify-content:center;gap:4px}
+    .op-field{font-size:12px;line-height:1.5;color:#1a2e2e}
+    .op-field span{color:#4a6a6a;font-weight:400}
+    .op-field b{color:#1a2e2e;font-weight:700}
     .op-card-main{padding:10px 14px;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px}
     .op-header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-    .op-codigo{font-size:14px;font-weight:800;color:#f8fafc;white-space:nowrap}
-    .op-qtde{font-size:13px;font-weight:700;color:#f8fafc;white-space:nowrap;flex-shrink:0}
-    .op-qtde span{color:#94a3b8;font-weight:400}
-    .op-descricao{font-size:11px;color:#cbd5e1;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    /* Faixa de botões — fundo mais escuro para separar visualmente da info */
-    .op-card-actions{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#131f2e;border-top:1px solid #334155;flex-wrap:wrap}
+    .op-codigo{font-size:14px;font-weight:800;color:#1a5c5a;white-space:nowrap}
+    .op-qtde{font-size:13px;font-weight:700;color:#1a2e2e;white-space:nowrap;flex-shrink:0}
+    .op-qtde span{color:#4a6a6a;font-weight:400}
+    .op-descricao{font-size:11px;color:#4a6a6a;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .op-card-actions{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#f0f6f6;border-top:1px solid #d8e8ea;flex-wrap:wrap}
     .op-card-actions-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
-    .op-obs-label{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
-    .op-silk-label{font-size:12px;font-weight:700;color:#e2e8f0;white-space:nowrap}
-    .btn-silk{height:28px;padding:0 12px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(26,115,232,.3);color:#93c5fd;border:1px solid rgba(26,115,232,.6);white-space:nowrap;flex-shrink:0}
-    .btn-silk-metal{background:rgba(148,163,184,.2);color:#cbd5e1;border-color:rgba(148,163,184,.4)}
+    .op-obs-label{font-size:11px;color:#4a6a6a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+    .op-silk-label{font-size:12px;font-weight:700;color:#1a2e2e;white-space:nowrap}
+    .btn-silk{height:28px;padding:0 12px;border-radius:5px;font-size:11px;font-weight:700;background:#1a5c5a;color:#fff;border:none;white-space:nowrap;flex-shrink:0}
+    .btn-silk-metal{background:#4a6a6a;color:#fff}
     .btn-pagar-op{height:28px;padding:0 14px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
     .btn-pagar-op.aberta{background:#16a34a;color:#fff}
-    .btn-pagar-op.baixa{background:#1a73e8;color:#fff}
-    .btn-pagar-op.pago{background:transparent;color:#64748b;border:1px solid #334155;pointer-events:none}
+    .btn-pagar-op.baixa{background:#1a5c5a;color:#fff}
+    .btn-pagar-op.pago{background:transparent;color:#9ababa;border:1px solid #c8d8da;pointer-events:none}
     /* Refresh bar */
-    .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 4px;font-size:11px;color:#94a3b8}
-    .refresh-progress{flex:1;height:3px;background:#334155;border-radius:2px;overflow:hidden}
-    .refresh-progress-inner{height:100%;background:#1a73e8;border-radius:2px;transition:width 1s linear}
+    .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 4px;font-size:11px;color:#4a6a6a}
+    .refresh-progress{flex:1;height:3px;background:#d8e8ea;border-radius:2px;overflow:hidden}
+    .refresh-progress-inner{height:100%;background:#1a5c5a;border-radius:2px;transition:width 1s linear}
   </style>
 </head>
 <body>
