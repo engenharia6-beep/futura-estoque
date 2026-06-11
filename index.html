@@ -167,11 +167,11 @@
     .dash-card.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
 
     /* ── Foto do produto no detalhe ── */
-    .detalhe-foto{width:100%;height:100%;object-fit:contain;border-radius:12px}
+    .detalhe-foto{width:100%;height:100%;object-fit:cover;border-radius:12px}
     .detalhe-foto-placeholder{width:100%;height:100%;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:40px;background:var(--bg);border:1px solid var(--border)}
     .detalhe-foto-wrap{width:110px;height:110px;border-radius:12px;flex-shrink:0;overflow:hidden;background:var(--bg);border:1px solid var(--border)}
     /* Foto pequena na lista */
-    .item-foto{width:40px;height:40px;border-radius:10px;object-fit:contain;flex-shrink:0}
+    .item-foto{width:40px;height:40px;border-radius:10px;object-fit:cover;flex-shrink:0}
     .item-foto-placeholder{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
     .item-foto-placeholder.insumo{background:var(--ins-light)}
     .item-foto-placeholder.pa{background:var(--pa-light)}
@@ -639,6 +639,13 @@ let _filaImpressao   = [];   // [{ codigo, tipo:'insumo'|'pa' }]
 // ══════════════════════════════════════════════════════
 //  API
 // ══════════════════════════════════════════════════════
+// Chave única por envio — protege contra dupla gravação em caso de timeout
+function _gerarChave() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+}
+
+let _requisicaoEmAndamento = false; // trava global para operações críticas
+
 async function api(acao, dados = {}) {
   const ctrl = new AbortController();
   const t    = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
@@ -651,7 +658,7 @@ async function api(acao, dados = {}) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return await res.json();
   } catch(e) {
-    if (e.name === 'AbortError') throw new Error('Tempo esgotado. Verifique a conexão.');
+    if (e.name === 'AbortError') throw new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.');
     throw e;
   } finally { clearTimeout(t); }
 }
@@ -1117,19 +1124,25 @@ async function abrirBaixaPAOp() {
 }
 
 async function confirmarBaixaPAOp() {
+  if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
   const qtde = parseFloat(document.getElementById('bpa-qtde').value || 0);
   const obs  = document.getElementById('bpa-obs').value.trim();
   const msg  = document.getElementById('bpa-msg');
   if (!qtde || qtde <= 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
-  setBtn('btn-confirmar-bpa', true, '<span class="spinner"></span>');
+
+  _requisicaoEmAndamento = true;
+  const chaveIdem = _gerarChave();
+  setBtn('btn-confirmar-bpa', true, '<span class="spinner"></span> Gravando...');
   try {
     const res = await api('gravarMovimentoPA', {
       codigo: _opAtual.codigo, descricao: _opAtual.descricao,
       tipo: 'SAIDA', qtde, op: _opAtual.op,
       obs: obs || 'Baixa PA — OP ' + _opAtual.op,
-      usuario: USUARIO.nome || USUARIO.usuario, qrcode: '',
+      usuario: USUARIO.nome || USUARIO.usuario,
+      qrcode: '', chaveIdem,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    if (res.jaGravado) { mostrarMsg(msg, '⚠️ Esta baixa já foi registrada anteriormente.', 'warn'); return; }
     fecharModal('modal-baixa-pa-op');
     toast('✔ PA baixado! Carregando insumos...');
     _contextoInsumos = {
@@ -1139,8 +1152,12 @@ async function confirmarBaixaPAOp() {
     };
     await abrirModalInsumosConfirm(`Baixa PA via OP ${_opAtual.op}`, qtde, _opAtual.codigo, _opAtual.op);
     carregarOPS(); carregarPA();
-  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-  finally { setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA'); }
+  } catch(e) {
+    mostrarMsg(msg, e.message, 'err');
+  } finally {
+    _requisicaoEmAndamento = false;
+    setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA');
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1337,6 +1354,7 @@ function atualizarContadorInsumos() {
 
 async function confirmarGravarInsumos() {
   if (!_contextoInsumos) return;
+  if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
   const msg = document.getElementById('ins-confirm-msg');
   // Coleta apenas os itens MARCADOS com quantidade > 0
   const itens = Array.from(document.querySelectorAll('.ins-item-chk'))
@@ -1357,16 +1375,17 @@ async function confirmarGravarInsumos() {
     return;
   }
 
+  _requisicaoEmAndamento = true;
   setBtn('btn-gravar-insumos', true, '<span class="spinner"></span> Gravando...');
+  const chaveIdem = _gerarChave();
   try {
     const res = await api('gravarBaixaInsumos', {
       itens,
       dadosBase: {
-        op:          _contextoInsumos.op          || '',
-        usuario:     _contextoInsumos.usuario      || '',
-        computer:    '',
-        localizacao: '',
-        ip:          '',
+        op:          _contextoInsumos.op       || '',
+        usuario:     _contextoInsumos.usuario   || '',
+        computer:    '', localizacao: '', ip:  '',
+        chaveIdem,
       },
     });
 
@@ -1381,8 +1400,11 @@ async function confirmarGravarInsumos() {
       toast(texto);
     }
     setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; }, 1800);
-  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-  finally { setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar'); }
+  } catch(e) { mostrarMsg(msg, e.message, 'err'); }
+  finally {
+    _requisicaoEmAndamento = false;
+    setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar');
+  }
 }
 
 // ══════════════════════════════════════════════════════
