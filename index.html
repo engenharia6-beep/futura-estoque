@@ -236,43 +236,43 @@
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
-    /* ── Card OP — layout exato do sistema atual ── */
-    .op-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:background var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:10px}
-    .op-card:active{background:var(--bg-hover)}
-    .op-card.pago{opacity:.55}
-    .op-card.baixa{border-color:rgba(26,115,232,.4);background:rgba(26,115,232,.04)}
-    /* Layout interno: foto à esquerda, tudo à direita */
-    .op-card-inner{display:flex;gap:0;min-height:110px}
-    .op-card-foto{width:110px;min-width:110px;max-width:110px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;flex-shrink:0;border-right:1px solid var(--border);padding:4px}
+    /* ── Card OP — layout corrigido, borda nítida, alto contraste ── */
+    .op-card{background:#1e293b;border:2px solid #4b6080;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:12px}
+    .op-card:hover{border-color:#6b8aad}
+    .op-card:active{background:#263550}
+    .op-card.pago{opacity:.5;border-color:#2d3f52}
+    .op-card.baixa{border-color:#1a73e8;background:rgba(26,115,232,.06)}
+    /* Foto + conteúdo — align-items:stretch faz foto esticar junto com conteúdo */
+    .op-card-inner{display:flex;align-items:stretch}
+    .op-card-foto{width:110px;min-width:110px;background:#0f172a;display:flex;align-items:center;justify-content:center;font-size:36px;overflow:hidden;flex-shrink:0;border-right:2px solid #4b6080;padding:6px}
     .op-card-foto img{width:100%;height:100%;object-fit:contain}
-    /* Coluna direita: tudo empilhado */
     .op-card-content{flex:1;min-width:0;display:flex;flex-direction:column}
-    /* Bloco superior: esquerda (Pedido/OP/Origem) + direita (Código/Qtde/Desc) */
-    .op-card-info{display:flex;flex:1;border-bottom:1px solid var(--border)}
-    .op-card-ids{padding:10px 12px;min-width:120px;width:120px;flex-shrink:0;border-right:1px solid var(--border);display:flex;flex-direction:column;justify-content:center;gap:2px}
-    .op-card-ids .op-field{font-size:12px;line-height:1.5;white-space:nowrap}
-    .op-card-ids .op-field b{color:var(--text)}
-    .op-card-ids .op-field span{color:var(--text-muted);font-weight:400}
-    .op-card-main{padding:10px 12px;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px}
-    .op-card-main .op-header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-    .op-card-main .op-codigo{font-size:13px;font-weight:700;white-space:nowrap}
-    .op-card-main .op-qtde{font-size:13px;font-weight:700;white-space:nowrap;flex-shrink:0}
-    .op-card-main .op-qtde span{color:var(--text-muted);font-weight:400}
-    .op-card-main .op-descricao{font-size:11px;color:var(--text-muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    /* Linha de botões */
-    .op-card-actions{display:flex;align-items:center;gap:8px;padding:7px 12px;flex-wrap:wrap}
-    .op-card-actions-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-    .op-obs-label{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
-    .op-silk-label{font-size:11px;font-weight:600;color:var(--text-muted);white-space:nowrap}
-    .btn-silk{height:28px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(26,115,232,.2);color:#60a5fa;border:1px solid rgba(26,115,232,.3);white-space:nowrap;flex-shrink:0}
-    .btn-silk-metal{background:rgba(100,116,139,.15);color:var(--text-muted);border-color:rgba(100,116,139,.25)}
-    .btn-pagar-op{height:28px;padding:0 12px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
-    .btn-pagar-op.aberta{background:var(--success);color:#fff}
-    .btn-pagar-op.baixa{background:var(--accent);color:#fff}
-    .btn-pagar-op.pago{background:transparent;color:var(--text-muted);border:1px solid var(--border);pointer-events:none}
-    .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 2px;font-size:11px;color:var(--text-muted)}
-    .refresh-progress{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
-    .refresh-progress-inner{height:100%;background:var(--accent);border-radius:2px;transition:width 1s linear}
+    .op-card-info{display:flex;flex:1}
+    .op-card-ids{padding:10px 14px;min-width:130px;width:130px;flex-shrink:0;border-right:1px solid #334155;display:flex;flex-direction:column;justify-content:center;gap:4px}
+    .op-field{font-size:12px;line-height:1.5;color:#e2e8f0}
+    .op-field span{color:#94a3b8;font-weight:400}
+    .op-field b{color:#f8fafc;font-weight:700}
+    .op-card-main{padding:10px 14px;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:4px}
+    .op-header{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+    .op-codigo{font-size:14px;font-weight:800;color:#f8fafc;white-space:nowrap}
+    .op-qtde{font-size:13px;font-weight:700;color:#f8fafc;white-space:nowrap;flex-shrink:0}
+    .op-qtde span{color:#94a3b8;font-weight:400}
+    .op-descricao{font-size:11px;color:#cbd5e1;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    /* Faixa de botões — fundo mais escuro para separar visualmente da info */
+    .op-card-actions{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#131f2e;border-top:1px solid #334155;flex-wrap:wrap}
+    .op-card-actions-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0}
+    .op-obs-label{font-size:11px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+    .op-silk-label{font-size:12px;font-weight:700;color:#e2e8f0;white-space:nowrap}
+    .btn-silk{height:28px;padding:0 12px;border-radius:5px;font-size:11px;font-weight:700;background:rgba(26,115,232,.3);color:#93c5fd;border:1px solid rgba(26,115,232,.6);white-space:nowrap;flex-shrink:0}
+    .btn-silk-metal{background:rgba(148,163,184,.2);color:#cbd5e1;border-color:rgba(148,163,184,.4)}
+    .btn-pagar-op{height:28px;padding:0 14px;border-radius:5px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0}
+    .btn-pagar-op.aberta{background:#16a34a;color:#fff}
+    .btn-pagar-op.baixa{background:#1a73e8;color:#fff}
+    .btn-pagar-op.pago{background:transparent;color:#64748b;border:1px solid #334155;pointer-events:none}
+    /* Refresh bar */
+    .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 4px;font-size:11px;color:#94a3b8}
+    .refresh-progress{flex:1;height:3px;background:#334155;border-radius:2px;overflow:hidden}
+    .refresh-progress-inner{height:100%;background:#1a73e8;border-radius:2px;transition:width 1s linear}
   </style>
 </head>
 <body>
