@@ -29,17 +29,18 @@
       --header-h:56px; --nav-h:60px;
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    html{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text)}
     input,button,select,textarea{font-family:inherit}
     button{cursor:pointer;border:none;outline:none}
     a{color:var(--accent);text-decoration:none}
 
     /* ── App shell ── */
     #app{
-      position:fixed;
-      top:0;left:0;right:0;bottom:0;
       display:flex;
       flex-direction:column;
+      height:100vh;
+      max-height:100vh;
       overflow:hidden;
     }
     #header{height:var(--header-h);background:#1a5c5a;border-bottom:none;display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
@@ -1796,12 +1797,13 @@ if ('serviceWorker' in navigator) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  // Fecha todos os modais que possam ter ficado abertos
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
   const saved = sessionStorage.getItem('usuario');
   if (saved) {
     try { USUARIO = JSON.parse(saved); entrarNoApp(); }
     catch { sessionStorage.clear(); }
   }
-  // Se não tem sessão, o login já aparece (não tem .hidden por padrão)
   setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 400);
 });
 </script>
