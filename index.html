@@ -200,15 +200,20 @@
     .insumos-aviso{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--warning);line-height:1.5}
 
     /* ── Tabela de insumos para confirmação ── */
-    .ins-confirm-header{display:grid;grid-template-columns:1fr 72px 72px 80px;gap:6px;padding:6px 14px;font-size:10px;font-weight:700;color:var(--text-label);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-    .ins-confirm-row{display:grid;grid-template-columns:1fr 72px 72px 80px;gap:6px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(51,65,85,.5)}
-    .ins-confirm-row.sem-saldo{background:rgba(239,68,68,.06)}
+    .ins-confirm-header{display:grid;grid-template-columns:32px 1fr 60px 72px 72px;gap:6px;padding:6px 14px;font-size:10px;font-weight:700;color:var(--text-label);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+    .ins-confirm-row{display:grid;grid-template-columns:32px 1fr 60px 72px 72px;gap:6px;align-items:center;padding:8px 14px;border-bottom:1px solid rgba(51,65,85,.5);transition:opacity .15s}
+    .ins-confirm-row.desmarcado{opacity:.4}
     .ins-confirm-row.sem-saldo .ins-saldo{color:var(--danger)}
     .ins-confirm-nome{font-size:12px;line-height:1.3;min-width:0}
     .ins-confirm-codigo{font-size:10px;font-family:var(--mono);color:var(--text-muted)}
     .ins-saldo{font-size:12px;font-family:var(--mono);text-align:center;color:var(--success)}
-    .ins-qtde-input{width:100%;height:32px;padding:0 8px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:var(--mono);text-align:center}
+    .ins-qtde-input{width:100%;height:32px;padding:0 6px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:var(--mono);text-align:center}
+    .ins-qtde-input:disabled{opacity:.35;cursor:not-allowed}
     .ins-qtde-input.insuf{border-color:var(--danger);background:rgba(239,68,68,.08)}
+    /* Checkbox estilizado */
+    .ins-chk{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+    .ins-chk-all-wrap{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)}
+    .selecionados-count{font-size:11px;color:var(--text-muted);padding:6px 14px;text-align:right}
 
     @media(min-width:600px){
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
@@ -551,10 +556,16 @@
       <div id="ins-confirm-aviso" class="insumos-aviso" style="display:none"></div>
     </div>
     <!-- Tabela de insumos -->
+    <div class="ins-chk-all-wrap">
+      <input type="checkbox" id="ins-chk-all" class="ins-chk" checked onchange="toggleTodosInsumos(this.checked)">
+      <label for="ins-chk-all" style="cursor:pointer">Selecionar todos</label>
+      <span id="ins-selecionados-count" class="selecionados-count" style="margin-left:auto"></span>
+    </div>
     <div class="ins-confirm-header">
+      <div></div>
       <div>Insumo</div>
       <div style="text-align:center">Saldo</div>
-      <div style="text-align:center">Necessário</div>
+      <div style="text-align:center">Neces.</div>
       <div style="text-align:center">Baixar</div>
     </div>
     <div id="ins-confirm-lista"></div>
@@ -1177,12 +1188,15 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
     }
 
     document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => `
-      <div class="ins-confirm-row ${!it.suficiente ? 'sem-saldo' : ''}">
+      <div class="ins-confirm-row ${!it.suficiente ? 'sem-saldo' : ''}" id="ins-row-${idx}">
+        <input type="checkbox" class="ins-chk ins-item-chk" id="ins-chk-${idx}"
+          checked data-idx="${idx}"
+          onchange="toggleInsumoRow(${idx}, this.checked)">
         <div class="ins-confirm-nome">
           <div class="ins-confirm-codigo">${esc(it.codigoInsumo)}</div>
           <div>${esc(it.descricao)}</div>
         </div>
-        <div class="ins-saldo ${!it.suficiente ? '' : ''}">${it.saldoAtual}</div>
+        <div class="ins-saldo">${it.saldoAtual}</div>
         <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdeNecessaria}</div>
         <input class="ins-qtde-input ${!it.suficiente ? 'insuf' : ''}"
           id="ins-qtde-${idx}"
@@ -1194,6 +1208,8 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
           oninput="validarQtdeInsumo(this, ${it.saldoAtual})">
       </div>`).join('');
 
+    atualizarContadorInsumos();
+
   } catch(e) {
     document.getElementById('ins-confirm-lista').innerHTML =
       `<div style="padding:16px;color:var(--danger);font-size:13px">Erro: ${esc(e.message)}</div>`;
@@ -1203,19 +1219,56 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
 function validarQtdeInsumo(input, saldoAtual) {
   const val = parseFloat(input.value || 0);
   input.classList.toggle('insuf', val > saldoAtual);
+  atualizarContadorInsumos();
+}
+
+function toggleInsumoRow(idx, marcado) {
+  const row   = document.getElementById('ins-row-' + idx);
+  const input = document.getElementById('ins-qtde-' + idx);
+  row.classList.toggle('desmarcado', !marcado);
+  input.disabled = !marcado;
+  // Atualiza o "selecionar todos"
+  const todos   = document.querySelectorAll('.ins-item-chk');
+  const marcados = document.querySelectorAll('.ins-item-chk:checked');
+  const chkAll  = document.getElementById('ins-chk-all');
+  if (chkAll) {
+    chkAll.indeterminate = marcados.length > 0 && marcados.length < todos.length;
+    chkAll.checked = marcados.length === todos.length;
+  }
+  atualizarContadorInsumos();
+}
+
+function toggleTodosInsumos(marcado) {
+  document.querySelectorAll('.ins-item-chk').forEach(chk => {
+    const idx = parseInt(chk.dataset.idx);
+    chk.checked = marcado;
+    toggleInsumoRow(idx, marcado);
+  });
+}
+
+function atualizarContadorInsumos() {
+  const marcados = document.querySelectorAll('.ins-item-chk:checked').length;
+  const total    = document.querySelectorAll('.ins-item-chk').length;
+  const el = document.getElementById('ins-selecionados-count');
+  if (el) el.textContent = `${marcados} de ${total} selecionados`;
 }
 
 async function confirmarGravarInsumos() {
   if (!_contextoInsumos) return;
-  const inputs = document.querySelectorAll('#ins-confirm-lista .ins-qtde-input');
-  const msg    = document.getElementById('ins-confirm-msg');
-  if (!inputs.length) { fecharModal('modal-insumos-confirm'); return; }
-
-  const itens = Array.from(inputs).map(inp => ({
-    codigoInsumo: inp.dataset.codigo,
-    descricao:    inp.dataset.descricao,
-    qtdeBaixar:   parseFloat(inp.value || 0),
-  })).filter(it => it.qtdeBaixar > 0);
+  const msg = document.getElementById('ins-confirm-msg');
+  // Coleta apenas os itens MARCADOS com quantidade > 0
+  const itens = Array.from(document.querySelectorAll('.ins-item-chk'))
+    .filter(chk => chk.checked)
+    .map(chk => {
+      const idx   = chk.dataset.idx;
+      const input = document.getElementById('ins-qtde-' + idx);
+      return {
+        codigoInsumo: input.dataset.codigo,
+        descricao:    input.dataset.descricao,
+        qtdeBaixar:   parseFloat(input.value || 0),
+      };
+    })
+    .filter(it => it.qtdeBaixar > 0);
 
   if (!itens.length) {
     mostrarMsg(msg, 'Nenhum item com quantidade para baixar.', 'warn');
