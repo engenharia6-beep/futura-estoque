@@ -34,15 +34,19 @@
     button{cursor:pointer;border:none;outline:none}
     a{color:var(--accent);text-decoration:none}
 
-    /* ── App shell ── */
-    #app{height:100%;display:flex;flex-direction:column;overflow:hidden}
+    /* ── App shell — 100dvh garante que a barra do browser não corte o nav ── */
+    #app{
+      height:100vh;
+      height:100dvh; /* desktop Chrome e mobile — exclui barra do browser */
+      display:flex;flex-direction:column;overflow:hidden;
+    }
     #header{height:var(--header-h);background:#1a5c5a;border-bottom:none;display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
     #header.visible{display:flex}
     #header-title{flex:1;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;text-transform:uppercase;letter-spacing:.08em}
     #header-user{font-size:12px;color:rgba(255,255,255,.75);white-space:nowrap}
     #btn-logout{background:transparent;color:rgba(255,255,255,.75);font-size:20px;padding:4px;line-height:1;transition:color var(--transition)}
     #btn-logout:hover{color:#fff}
-    #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;min-height:0}
     #bottom-nav{height:var(--nav-h);background:#1a5c5a;border-top:none;display:none;flex-shrink:0;box-shadow:0 -2px 8px rgba(0,0,0,.12)}
     #bottom-nav.visible{display:grid;grid-template-columns:repeat(5,1fr)}
     .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;color:rgba(255,255,255,.6);font-size:10px;font-weight:600;padding:6px 4px;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
@@ -237,7 +241,7 @@
       .modal-overlay{align-items:center}
     }
     /* ── Card OP — tema claro, borda nítida ── */
-    .op-card{background:#fff;border:2px solid #b0c8ca;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .op-card{background:#fff;border:2px solid #7aa4a6;border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:border-color var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;margin-bottom:12px;box-shadow:0 2px 6px rgba(0,0,0,.08)}
     .op-card:hover{border-color:#1a5c5a;box-shadow:0 2px 10px rgba(26,92,90,.15)}
     .op-card:active{background:#f5fafa}
     .op-card.pago{opacity:.5;border-color:#d0dfe0}
@@ -744,7 +748,7 @@ function navegar(pagina) {
   document.getElementById('header-title').textContent = TITULOS[pagina] || 'Controle de Estoque';
   if (pagina === 'insumos'    && !insumoCache.length) carregarInsumos();
   if (pagina === 'pa'         && !paCache.length)     carregarPA();
-  if (pagina === 'ops')                               carregarOPS();
+  if (pagina === 'ops')                               carregarOPS(false);
   if (pagina === 'movimentos')                        carregarMovimentos();
   if (pagina === 'dashboard')                         carregarDashboard();
 }
@@ -1103,7 +1107,9 @@ let _refreshTimer   = null;
 let _refreshSegundos= 0;
 const REFRESH_INTERVALO = 300; // 5 minutos
 
-async function carregarOPS() {
+async function carregarOPS(forcar = false) {
+  // Não recarrega se já tem dados e não foi forçado
+  if (opsCache.length && !forcar) { renderOPS(opsCache); return; }
   const lista = document.getElementById('lista-ops');
   lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
   try {
@@ -1119,7 +1125,7 @@ async function carregarOPS() {
 }
 
 function _iniciarAutoRefresh() {
-  clearInterval(_refreshTimer);
+  if (_refreshTimer) return; // já está rodando, não reinicia
   _refreshSegundos = REFRESH_INTERVALO;
   _atualizarContadorRefresh();
   _refreshTimer = setInterval(() => {
@@ -1127,7 +1133,8 @@ function _iniciarAutoRefresh() {
     _atualizarContadorRefresh();
     if (_refreshSegundos <= 0) {
       clearInterval(_refreshTimer);
-      carregarOPS();
+      _refreshTimer = null;
+      recarregarOPSManual();
     }
   }, 1000);
 }
@@ -1144,7 +1151,9 @@ function _atualizarContadorRefresh() {
 
 async function recarregarOPSManual() {
   clearInterval(_refreshTimer);
-  await carregarOPS();
+  _refreshTimer = null;
+  opsCache = [];
+  await carregarOPS(true);
 }
 
 function renderOPS(ops) {
