@@ -10,591 +10,209 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="assets/icon-192.png">
   <title>Controle de Estoque — Futura</title>
-
-  <style>
-    /* ══════════════════════════════════════════════════
-       TOKENS
-    ══════════════════════════════════════════════════ */
-    :root {
-      --bg:          #0f172a;
-      --bg-card:     #1e293b;
-      --bg-input:    #0f172a;
-      --border:      #334155;
-      --border-focus:#1a73e8;
-      --text:        #f1f5f9;
-      --text-muted:  #94a3b8;
-      --text-label:  #64748b;
-      --accent:      #1a73e8;
-      --accent-hover:#1558c0;
-      --success:     #22c55e;
-      --warning:     #f59e0b;
-      --danger:      #ef4444;
-      --pa:          #0f6e56;
-      --insumo:      #1a73e8;
-      --radius:      10px;
-      --radius-sm:   6px;
-      --shadow:      0 4px 24px rgba(0,0,0,.4);
-      --transition:  .18s ease;
-      --font:        'Inter', system-ui, -apple-system, sans-serif;
-      --mono:        'JetBrains Mono', 'Fira Code', monospace;
-      --header-h:    56px;
-      --nav-h:       60px;
-    }
-
-    /* ══════════════════════════════════════════════════
-       RESET & BASE
-    ══════════════════════════════════════════════════ */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      height: 100%; overflow: hidden;
-      font-family: var(--font);
-      background: var(--bg);
-      color: var(--text);
-      -webkit-font-smoothing: antialiased;
-    }
-    input, button, select, textarea { font-family: inherit; }
-    button { cursor: pointer; border: none; outline: none; }
-    a { color: var(--accent); text-decoration: none; }
-
-    /* ══════════════════════════════════════════════════
-       APP SHELL
-    ══════════════════════════════════════════════════ */
-    #app {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* ── Header ─────────────────────────────────────── */
-    #header {
-      height: var(--header-h);
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
-      gap: 12px;
-      flex-shrink: 0;
-      display: none;
-    }
-    #header.visible { display: flex; }
-    #header-title {
-      flex: 1;
-      font-size: 15px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    #header-user {
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: nowrap;
-    }
-    #btn-logout {
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 20px;
-      padding: 4px;
-      line-height: 1;
-      transition: color var(--transition);
-    }
-    #btn-logout:hover { color: var(--danger); }
-
-    /* ── Conteúdo principal ──────────────────────────── */
-    #content {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* ── Bottom Nav ──────────────────────────────────── */
-    #bottom-nav {
-      height: var(--nav-h);
-      background: var(--bg-card);
-      border-top: 1px solid var(--border);
-      display: none;
-      flex-shrink: 0;
-    }
-    #bottom-nav.visible {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-    }
-    .nav-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 3px;
-      background: transparent;
-      color: var(--text-muted);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 6px 4px;
-      transition: color var(--transition);
-      -webkit-tap-highlight-color: transparent;
-    }
-    .nav-item .nav-icon { font-size: 20px; line-height: 1; }
-    .nav-item.active { color: var(--accent); }
-    .nav-item:active { opacity: .7; }
-
-    /* ══════════════════════════════════════════════════
-       TELAS (pages)
-    ══════════════════════════════════════════════════ */
-    .page {
-      display: none;
-      min-height: 100%;
-      padding-bottom: 16px;
-    }
-    .page.active { display: block; }
-
-    /* ══════════════════════════════════════════════════
-       LOGIN
-    ══════════════════════════════════════════════════ */
-    #page-login {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100%;
-      padding: 32px 24px;
-    }
-    #page-login.active { display: flex; }
-
-    .login-logo {
-      width: 64px;
-      height: 64px;
-      background: var(--accent);
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      margin-bottom: 24px;
-      box-shadow: 0 8px 32px rgba(26,115,232,.35);
-    }
-    .login-title {
-      font-size: 22px;
-      font-weight: 700;
-      text-align: center;
-      margin-bottom: 4px;
-    }
-    .login-subtitle {
-      font-size: 13px;
-      color: var(--text-muted);
-      text-align: center;
-      margin-bottom: 36px;
-    }
-    .login-form {
-      width: 100%;
-      max-width: 360px;
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-
-    /* ══════════════════════════════════════════════════
-       COMPONENTES REUTILIZÁVEIS
-    ══════════════════════════════════════════════════ */
-
-    /* ── Field ───────────────────────────────────────── */
-    .field { display: flex; flex-direction: column; gap: 6px; }
-    .field label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-label);
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-    .field input, .field select {
-      height: 46px;
-      padding: 0 14px;
-      background: var(--bg-input);
-      border: 1.5px solid var(--border);
-      border-radius: var(--radius-sm);
-      color: var(--text);
-      font-size: 15px;
-      transition: border-color var(--transition);
-      width: 100%;
-    }
-    .field input:focus, .field select:focus {
-      border-color: var(--border-focus);
-      outline: none;
-    }
-    .field input::placeholder { color: var(--text-label); }
-
-    /* ── Botões ──────────────────────────────────────── */
-    .btn {
-      height: 48px;
-      padding: 0 20px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 600;
-      transition: background var(--transition), opacity var(--transition);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-    .btn:active { opacity: .8; }
-    .btn:disabled { opacity: .45; cursor: not-allowed; }
-    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
-    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-    .btn-secondary { background: var(--bg-card); color: var(--text); border: 1.5px solid var(--border); }
-    .btn-danger  { background: var(--danger); color: #fff; }
-    .btn-success { background: var(--success); color: #fff; }
-    .btn-sm { height: 34px; font-size: 12px; padding: 0 12px; }
-    .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 50%; }
-
-    /* ── Mensagem de status ──────────────────────────── */
-    .msg {
-      font-size: 13px;
-      padding: 10px 14px;
-      border-radius: var(--radius-sm);
-      display: none;
-      line-height: 1.4;
-    }
-    .msg.show { display: block; }
-    .msg.ok   { background: rgba(34,197,94,.12); color: var(--success); border: 1px solid rgba(34,197,94,.25); }
-    .msg.err  { background: rgba(239,68,68,.12);  color: var(--danger);  border: 1px solid rgba(239,68,68,.25); }
-    .msg.warn { background: rgba(245,158,11,.12); color: var(--warning); border: 1px solid rgba(245,158,11,.25); }
-
-    /* ── Card ────────────────────────────────────────── */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-    }
-
-    /* ── Section header ──────────────────────────────── */
-    .section-header {
-      padding: 16px 16px 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .section-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: .07em;
-    }
-
-    /* ── Search bar ──────────────────────────────────── */
-    .search-wrap {
-      padding: 8px 16px 12px;
-    }
-    .search-input {
-      width: 100%;
-      height: 40px;
-      padding: 0 14px 0 38px;
-      background: var(--bg-card);
-      border: 1.5px solid var(--border);
-      border-radius: 20px;
-      color: var(--text);
-      font-size: 14px;
-      transition: border-color var(--transition);
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: 12px center;
-    }
-    .search-input:focus { border-color: var(--border-focus); outline: none; }
-
-    /* ── Lista de itens ──────────────────────────────── */
-    .item-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
-    .item-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      cursor: pointer;
-      transition: border-color var(--transition), background var(--transition);
-      -webkit-tap-highlight-color: transparent;
-    }
-    .item-card:active { background: #263550; }
-    .item-card-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-    .item-card-icon.insumo { background: rgba(26,115,232,.15); }
-    .item-card-icon.pa     { background: rgba(15,110,86,.15); }
-    .item-card-body { flex: 1; min-width: 0; }
-    .item-card-code {
-      font-size: 11px;
-      font-family: var(--mono);
-      color: var(--text-muted);
-      margin-bottom: 2px;
-    }
-    .item-card-name {
-      font-size: 14px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .item-card-meta {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-    .saldo-badge {
-      font-size: 14px;
-      font-weight: 700;
-      font-family: var(--mono);
-      flex-shrink: 0;
-      text-align: right;
-    }
-    .saldo-badge.ok   { color: var(--success); }
-    .saldo-badge.low  { color: var(--warning); }
-    .saldo-badge.zero { color: var(--danger); }
-
-    /* ── Badge de tipo ───────────────────────────────── */
-    .badge {
-      display: inline-block;
-      font-size: 9px;
-      font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: .04em;
-    }
-    .badge-insumo { background: rgba(26,115,232,.2);  color: #60a5fa; }
-    .badge-pa     { background: rgba(15,110,86,.2);   color: #34d399; }
-    .badge-saida  { background: rgba(239,68,68,.15);  color: #f87171; }
-    .badge-entrada{ background: rgba(34,197,94,.15);  color: #4ade80; }
-
-    /* ── Spinner ─────────────────────────────────────── */
-    .spinner {
-      display: inline-block;
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(255,255,255,.25);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Empty state ─────────────────────────────────── */
-    .empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--text-muted);
-    }
-    .empty-state-icon { font-size: 40px; margin-bottom: 12px; }
-    .empty-state-text { font-size: 14px; }
-
-    /* ── Loading overlay ─────────────────────────────── */
-    #loading-overlay {
-      position: fixed;
-      inset: 0;
-      background: var(--bg);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      z-index: 9999;
-      transition: opacity .3s;
-    }
-    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
-    .loading-logo {
-      width: 56px;
-      height: 56px;
-      background: var(--accent);
-      border-radius: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-    }
-    .loading-text {
-      font-size: 13px;
-      color: var(--text-muted);
-    }
-
-    /* ── Modal ───────────────────────────────────────── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.65);
-      z-index: 1000;
-      align-items: flex-end;
-      justify-content: center;
-    }
-    .modal-overlay.open { display: flex; }
-    .modal-sheet {
-      background: var(--bg-card);
-      border-radius: 20px 20px 0 0;
-      width: 100%;
-      max-width: 600px;
-      max-height: 92vh;
-      overflow-y: auto;
-      padding: 0 0 32px;
-      animation: slideUp .25s ease;
-    }
-    @keyframes slideUp {
-      from { transform: translateY(100%); }
-      to   { transform: translateY(0); }
-    }
-    .modal-handle {
-      width: 40px;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      margin: 12px auto 0;
-    }
-    .modal-header {
-      padding: 16px 20px 12px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .modal-title {
-      flex: 1;
-      font-size: 16px;
-      font-weight: 700;
-    }
-    .modal-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .modal-footer {
-      padding: 0 20px;
-      display: flex;
-      gap: 10px;
-    }
-    .modal-footer .btn { flex: 1; }
-
-    /* ── Toast ───────────────────────────────────────── */
-    #toast {
-      position: fixed;
-      bottom: calc(var(--nav-h) + 12px);
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: #1e293b;
-      border: 1px solid var(--border);
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 500;
-      padding: 10px 18px;
-      border-radius: 24px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .2s, transform .2s;
-      white-space: nowrap;
-      max-width: 90vw;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      z-index: 2000;
-      box-shadow: var(--shadow);
-    }
-    #toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-    #toast.ok   { border-color: rgba(34,197,94,.4);  color: var(--success); }
-    #toast.err  { border-color: rgba(239,68,68,.4);  color: var(--danger); }
-    #toast.warn { border-color: rgba(245,158,11,.4); color: var(--warning); }
-
-    /* ══════════════════════════════════════════════════
-       PÁGINA: DASHBOARD
-    ══════════════════════════════════════════════════ */
-    .dashboard-grid {
-      padding: 16px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .dash-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .dash-card-icon { font-size: 24px; }
-    .dash-card-value {
-      font-size: 26px;
-      font-weight: 800;
-      font-family: var(--mono);
-      color: var(--text);
-    }
-    .dash-card-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-    }
-    .dash-card.accent { border-color: rgba(26,115,232,.35); background: rgba(26,115,232,.08); }
-    .dash-card.pa     { border-color: rgba(15,110,86,.35);  background: rgba(15,110,86,.08); }
-
-    /* ══════════════════════════════════════════════════
-       RESPONSIVE — telas maiores (tablet/desktop)
-    ══════════════════════════════════════════════════ */
-    @media (min-width: 600px) {
-      .modal-sheet { border-radius: 20px; margin: auto; max-height: 80vh; }
-      .modal-overlay { align-items: center; }
-      #bottom-nav.visible { display: none; }
-      #sidebar {
-        display: flex;
-        flex-direction: column;
-        width: 220px;
-        background: var(--bg-card);
-        border-right: 1px solid var(--border);
-        height: 100%;
-        flex-shrink: 0;
-      }
-      #main-area {
-        display: flex;
-        flex: 1;
-        overflow: hidden;
-      }
-    }
-  </style>
-
-  <!-- Fontes -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#0f172a; --bg-card:#1e293b; --bg-input:#0f172a; --bg-hover:#263550;
+      --border:#334155; --border-focus:#1a73e8;
+      --text:#f1f5f9; --text-muted:#94a3b8; --text-label:#64748b;
+      --accent:#1a73e8; --accent-hover:#1558c0;
+      --success:#22c55e; --warning:#f59e0b; --danger:#ef4444;
+      --pa:#0f6e56; --pa-light:rgba(15,110,86,.15);
+      --ins-light:rgba(26,115,232,.15);
+      --radius:10px; --radius-sm:6px;
+      --shadow:0 4px 24px rgba(0,0,0,.4);
+      --transition:.18s ease;
+      --font:'Inter',system-ui,-apple-system,sans-serif;
+      --mono:'JetBrains Mono','Fira Code',monospace;
+      --header-h:56px; --nav-h:60px;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+    input,button,select,textarea{font-family:inherit}
+    button{cursor:pointer;border:none;outline:none}
+    a{color:var(--accent);text-decoration:none}
+
+    /* ── App shell ── */
+    #app{height:100%;display:flex;flex-direction:column;overflow:hidden}
+    #header{height:var(--header-h);background:var(--bg-card);border-bottom:1px solid var(--border);display:none;align-items:center;padding:0 16px;gap:12px;flex-shrink:0}
+    #header.visible{display:flex}
+    #header-title{flex:1;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #header-user{font-size:12px;color:var(--text-muted);white-space:nowrap}
+    #btn-logout{background:transparent;color:var(--text-muted);font-size:20px;padding:4px;line-height:1;transition:color var(--transition)}
+    #btn-logout:hover{color:var(--danger)}
+    #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+    #bottom-nav{height:var(--nav-h);background:var(--bg-card);border-top:1px solid var(--border);display:none;flex-shrink:0}
+    #bottom-nav.visible{display:grid;grid-template-columns:repeat(5,1fr)}
+    .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;color:var(--text-muted);font-size:10px;font-weight:500;padding:6px 4px;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
+    .nav-item .nav-icon{font-size:20px;line-height:1}
+    .nav-item.active{color:var(--accent)}
+    .nav-item:active{opacity:.7}
+
+    /* ── Pages ── */
+    .page{display:none;min-height:100%;padding-bottom:16px}
+    .page.active{display:block}
+    #page-login{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100%;padding:32px 24px}
+    #page-login.active{display:flex}
+
+    /* ── Login ── */
+    .login-logo{width:64px;height:64px;background:var(--accent);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:24px;box-shadow:0 8px 32px rgba(26,115,232,.35)}
+    .login-title{font-size:22px;font-weight:700;text-align:center;margin-bottom:4px}
+    .login-subtitle{font-size:13px;color:var(--text-muted);text-align:center;margin-bottom:36px}
+    .login-form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:14px}
+
+    /* ── Fields & Buttons ── */
+    .field{display:flex;flex-direction:column;gap:6px}
+    .field label{font-size:11px;font-weight:600;color:var(--text-label);text-transform:uppercase;letter-spacing:.06em}
+    .field input,.field select{height:46px;padding:0 14px;background:var(--bg-input);border:1.5px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:15px;transition:border-color var(--transition);width:100%}
+    .field input:focus,.field select:focus{border-color:var(--border-focus);outline:none}
+    .field input::placeholder{color:var(--text-label)}
+    .btn{height:48px;padding:0 20px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;transition:background var(--transition),opacity var(--transition);display:inline-flex;align-items:center;justify-content:center;gap:8px}
+    .btn:active{opacity:.8}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .btn-primary{background:var(--accent);color:#fff;width:100%}
+    .btn-primary:hover:not(:disabled){background:var(--accent-hover)}
+    .btn-secondary{background:var(--bg-card);color:var(--text);border:1.5px solid var(--border)}
+    .btn-danger{background:var(--danger);color:#fff}
+    .btn-success{background:var(--success);color:#fff}
+    .btn-warn{background:var(--warning);color:#000}
+    .btn-pa{background:var(--pa);color:#fff}
+    .btn-sm{height:34px;font-size:12px;padding:0 12px}
+    .btn-full{width:100%}
+
+    /* ── Status msg ── */
+    .msg{font-size:13px;padding:10px 14px;border-radius:var(--radius-sm);display:none;line-height:1.4}
+    .msg.show{display:block}
+    .msg.ok{background:rgba(34,197,94,.12);color:var(--success);border:1px solid rgba(34,197,94,.25)}
+    .msg.err{background:rgba(239,68,68,.12);color:var(--danger);border:1px solid rgba(239,68,68,.25)}
+    .msg.warn{background:rgba(245,158,11,.12);color:var(--warning);border:1px solid rgba(245,158,11,.25)}
+
+    /* ── Cards & Lists ── */
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+    .section-header{padding:16px 16px 8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .section-title{font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em}
+    .search-wrap{padding:8px 16px 12px}
+    .search-input{width:100%;height:40px;padding:0 14px 0 38px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:20px;color:var(--text);font-size:14px;transition:border-color var(--transition);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center}
+    .search-input:focus{border-color:var(--border-focus);outline:none}
+    .item-list{padding:0 16px;display:flex;flex-direction:column;gap:8px}
+    .item-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color var(--transition),background var(--transition);-webkit-tap-highlight-color:transparent}
+    .item-card:active{background:var(--bg-hover)}
+    .item-card-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .item-card-icon.insumo{background:var(--ins-light)}
+    .item-card-icon.pa{background:var(--pa-light)}
+    .item-card-icon.op-ins{background:var(--ins-light)}
+    .item-card-icon.op-pa{background:var(--pa-light)}
+    .item-card-body{flex:1;min-width:0}
+    .item-card-code{font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:2px}
+    .item-card-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .item-card-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+    .saldo-badge{font-size:14px;font-weight:700;font-family:var(--mono);flex-shrink:0;text-align:right}
+    .saldo-badge.ok{color:var(--success)}
+    .saldo-badge.low{color:var(--warning)}
+    .saldo-badge.zero{color:var(--danger)}
+    .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+    .badge-insumo{background:rgba(26,115,232,.2);color:#60a5fa}
+    .badge-pa{background:rgba(15,110,86,.2);color:#34d399}
+    .badge-saida{background:rgba(239,68,68,.15);color:#f87171}
+    .badge-entrada{background:rgba(34,197,94,.15);color:#4ade80}
+
+    /* ── Spinner ── */
+    .spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── Empty / Loading ── */
+    .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted)}
+    .empty-state-icon{font-size:40px;margin-bottom:12px}
+    .empty-state-text{font-size:14px}
+    #loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999;transition:opacity .3s}
+    #loading-overlay.hidden{opacity:0;pointer-events:none}
+    .loading-logo{width:56px;height:56px;background:var(--accent);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:28px}
+
+    /* ── Modal bottom-sheet ── */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:flex-end;justify-content:center}
+    .modal-overlay.open{display:flex}
+    .modal-sheet{background:var(--bg-card);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;padding:0 0 32px;animation:slideUp .25s ease}
+    @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+    .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0}
+    .modal-header{padding:16px 20px 12px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+    .modal-title{flex:1;font-size:16px;font-weight:700}
+    .modal-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+    .modal-footer{padding:0 20px;display:flex;gap:10px}
+    .modal-footer .btn{flex:1}
+
+    /* ── Toast ── */
+    #toast{position:fixed;bottom:calc(var(--nav-h) + 12px);left:50%;transform:translateX(-50%) translateY(20px);background:#1e293b;border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:500;padding:10px 18px;border-radius:24px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;z-index:2000;box-shadow:var(--shadow)}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    #toast.ok{border-color:rgba(34,197,94,.4);color:var(--success)}
+    #toast.err{border-color:rgba(239,68,68,.4);color:var(--danger)}
+    #toast.warn{border-color:rgba(245,158,11,.4);color:var(--warning)}
+
+    /* ── Dashboard ── */
+    .dashboard-grid{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .dash-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:8px}
+    .dash-card-icon{font-size:24px}
+    .dash-card-value{font-size:26px;font-weight:800;font-family:var(--mono)}
+    .dash-card-label{font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+    .dash-card.accent{border-color:rgba(26,115,232,.35);background:rgba(26,115,232,.08)}
+    .dash-card.pa{border-color:rgba(15,110,86,.35);background:rgba(15,110,86,.08)}
+    .dash-card.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
+
+    /* ── Detalhe ── */
+    .detalhe-header{padding:20px;display:flex;gap:16px;align-items:flex-start;border-bottom:1px solid var(--border)}
+    .detalhe-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
+    .detalhe-code{font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px}
+    .detalhe-name{font-size:17px;font-weight:700;line-height:1.3}
+    .detalhe-meta{font-size:12px;color:var(--text-muted);margin-top:4px}
+    .info-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border)}
+    .info-row-label{font-size:12px;color:var(--text-muted)}
+    .info-row-value{font-size:14px;font-weight:600}
+    .saldo-grande{padding:20px;text-align:center}
+    .saldo-numero{font-size:48px;font-weight:800;font-family:var(--mono);line-height:1}
+    .saldo-label{font-size:12px;color:var(--text-muted);margin-top:6px}
+    .enderecos-list{padding:0 20px;display:flex;flex-direction:column;gap:8px}
+    .endereco-row{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px}
+    .endereco-nome{font-size:13px;font-family:var(--mono)}
+    .endereco-saldo{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--success)}
+    .acoes-detalhe{padding:20px;display:flex;flex-direction:column;gap:10px}
+
+    /* ── Modal OP ── */
+    .op-tipo-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 20px}
+    .op-tipo-card{background:var(--bg);border:2px solid var(--border);border-radius:var(--radius);padding:14px 10px;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition);-webkit-tap-highlight-color:transparent}
+    .op-tipo-card:active{opacity:.8}
+    .op-tipo-card .card-icon{font-size:24px;margin-bottom:6px}
+    .op-tipo-card .card-label{font-size:11px;font-weight:700;color:var(--text-muted)}
+    .op-tipo-card.ins{border-color:rgba(26,115,232,.4);background:rgba(26,115,232,.06)}
+    .op-tipo-card.pa{border-color:rgba(15,110,86,.4);background:rgba(15,110,86,.06)}
+    .op-tipo-card.tri{border-color:rgba(124,58,237,.4);background:rgba(124,58,237,.06)}
+    .preview-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.7}
+    .preview-row{display:flex;justify-content:space-between;align-items:center}
+    .preview-tipo-saida{color:var(--danger)}
+    .preview-tipo-entrada{color:var(--success)}
+    .insumos-aviso{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--warning);line-height:1.5}
+
+    @media(min-width:600px){
+      .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
+      .modal-overlay{align-items:center}
+    }
+  </style>
 </head>
 <body>
 
-<!-- Loading splash -->
 <div id="loading-overlay">
   <div class="loading-logo">📦</div>
-  <div class="spinner"></div>
-  <div class="loading-text">Carregando...</div>
+  <div class="spinner" style="border-top-color:var(--accent)"></div>
 </div>
 
-<!-- Toast global -->
 <div id="toast"></div>
 
 <div id="app">
-
-  <!-- Header -->
   <header id="header">
     <span id="header-title">Controle de Estoque</span>
     <span id="header-user"></span>
     <button id="btn-logout" title="Sair" onclick="logout()">⏻</button>
   </header>
 
-  <!-- Conteúdo -->
   <div id="content">
 
     <!-- ══ LOGIN ══ -->
@@ -603,207 +221,369 @@
       <div class="login-title">Controle de Estoque</div>
       <div class="login-subtitle">Futura</div>
       <div class="login-form">
-        <div class="field">
-          <label>Usuário</label>
-          <input id="login-user" type="text" placeholder="seu.usuario"
-            autocomplete="username" autocapitalize="none" spellcheck="false">
+        <div class="field"><label>Usuário</label>
+          <input id="login-user" type="text" placeholder="seu.usuario" autocomplete="username" autocapitalize="none" spellcheck="false">
         </div>
-        <div class="field">
-          <label>Senha</label>
-          <input id="login-pass" type="password" placeholder="••••••••"
-            autocomplete="current-password">
+        <div class="field"><label>Senha</label>
+          <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
         </div>
         <div id="login-msg" class="msg"></div>
-        <button id="btn-login" class="btn btn-primary" onclick="fazerLogin()">
-          Entrar
-        </button>
+        <button id="btn-login" class="btn btn-primary" onclick="fazerLogin()">Entrar</button>
       </div>
     </div>
 
     <!-- ══ DASHBOARD ══ -->
     <div id="page-dashboard" class="page">
-      <div class="section-header">
-        <span class="section-title">Resumo</span>
+      <div class="section-header"><span class="section-title">Resumo</span>
+        <button class="btn btn-secondary btn-sm" onclick="recarregarDashboard()">↻ Atualizar</button>
       </div>
       <div class="dashboard-grid">
-        <div class="dash-card accent">
-          <div class="dash-card-icon">📦</div>
-          <div class="dash-card-value" id="dash-total-insumos">—</div>
-          <div class="dash-card-label">Insumos ativos</div>
-        </div>
-        <div class="dash-card pa">
-          <div class="dash-card-icon">🏭</div>
-          <div class="dash-card-value" id="dash-total-pa">—</div>
-          <div class="dash-card-label">PAs ativos</div>
-        </div>
-        <div class="dash-card">
-          <div class="dash-card-icon">⚠️</div>
-          <div class="dash-card-value" id="dash-criticos" style="color:var(--warning)">—</div>
-          <div class="dash-card-label">Estoque crítico</div>
-        </div>
-        <div class="dash-card">
-          <div class="dash-card-icon">📋</div>
-          <div class="dash-card-value" id="dash-ops">—</div>
-          <div class="dash-card-label">OPs abertas</div>
-        </div>
+        <div class="dash-card accent"><div class="dash-card-icon">📦</div><div class="dash-card-value" id="dash-total-insumos">—</div><div class="dash-card-label">Insumos ativos</div></div>
+        <div class="dash-card pa"><div class="dash-card-icon">🏭</div><div class="dash-card-value" id="dash-total-pa">—</div><div class="dash-card-label">PAs ativos</div></div>
+        <div class="dash-card warn"><div class="dash-card-icon">⚠️</div><div class="dash-card-value" id="dash-criticos" style="color:var(--warning)">—</div><div class="dash-card-label">Estoque crítico</div></div>
+        <div class="dash-card" style="cursor:pointer" onclick="navegar('ops')"><div class="dash-card-icon">📋</div><div class="dash-card-value" id="dash-ops">—</div><div class="dash-card-label">OPs abertas</div></div>
       </div>
     </div>
 
     <!-- ══ INSUMOS ══ -->
     <div id="page-insumos" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-insumos" type="search"
-          placeholder="Buscar por código ou descrição..."
-          oninput="filtrarInsumos(this.value)">
+        <input class="search-input" id="search-insumos" type="search" placeholder="Código ou descrição..." oninput="filtrarInsumos(this.value)">
       </div>
       <div id="lista-insumos" class="item-list">
-        <div class="empty-state">
-          <div class="empty-state-icon">📦</div>
-          <div class="empty-state-text">Carregando insumos...</div>
-        </div>
+        <div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Carregando...</div></div>
       </div>
     </div>
 
     <!-- ══ PA ══ -->
     <div id="page-pa" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-pa" type="search"
-          placeholder="Buscar por código ou descrição..."
-          oninput="filtrarPA(this.value)">
+        <input class="search-input" id="search-pa" type="search" placeholder="Código ou descrição..." oninput="filtrarPA(this.value)">
       </div>
       <div id="lista-pa" class="item-list">
-        <div class="empty-state">
-          <div class="empty-state-icon">🏭</div>
-          <div class="empty-state-text">Carregando produtos acabados...</div>
-        </div>
+        <div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Carregando...</div></div>
       </div>
     </div>
 
     <!-- ══ OPS ══ -->
     <div id="page-ops" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-ops" type="search"
-          placeholder="Buscar OP ou produto..."
-          oninput="filtrarOPS(this.value)">
+        <input class="search-input" id="search-ops" type="search" placeholder="OP ou produto..." oninput="filtrarOPS(this.value)">
       </div>
       <div id="lista-ops" class="item-list">
-        <div class="empty-state">
-          <div class="empty-state-icon">📋</div>
-          <div class="empty-state-text">Carregando ordens de produção...</div>
-        </div>
+        <div class="empty-state"><div class="empty-state-icon">📋</div><div class="empty-state-text">Carregando...</div></div>
       </div>
     </div>
 
     <!-- ══ MOVIMENTOS ══ -->
     <div id="page-movimentos" class="page">
-      <div class="section-header">
-        <span class="section-title">Últimos movimentos</span>
+      <div class="section-header"><span class="section-title">Últimos movimentos</span>
         <select id="filtro-mov-tipo" style="background:var(--bg-card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;" onchange="carregarMovimentos()">
-          <option value="todos">Todos</option>
           <option value="insumo">Insumos</option>
           <option value="pa">PA</option>
         </select>
       </div>
       <div id="lista-movimentos" class="item-list">
-        <div class="empty-state">
-          <div class="empty-state-icon">🔄</div>
-          <div class="empty-state-text">Carregando movimentos...</div>
-        </div>
+        <div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-text">Carregando...</div></div>
       </div>
     </div>
 
   </div><!-- /content -->
 
-  <!-- Bottom Nav -->
   <nav id="bottom-nav">
-    <button class="nav-item active" data-page="dashboard" onclick="navegar('dashboard')">
-      <span class="nav-icon">🏠</span>
-      <span>Início</span>
-    </button>
-    <button class="nav-item" data-page="insumos" onclick="navegar('insumos')">
-      <span class="nav-icon">📦</span>
-      <span>Insumos</span>
-    </button>
-    <button class="nav-item" data-page="pa" onclick="navegar('pa')">
-      <span class="nav-icon">🏭</span>
-      <span>PA</span>
-    </button>
-    <button class="nav-item" data-page="ops" onclick="navegar('ops')">
-      <span class="nav-icon">📋</span>
-      <span>OPs</span>
-    </button>
-    <button class="nav-item" data-page="movimentos" onclick="navegar('movimentos')">
-      <span class="nav-icon">🔄</span>
-      <span>Movimentos</span>
-    </button>
+    <button class="nav-item active" data-page="dashboard" onclick="navegar('dashboard')"><span class="nav-icon">🏠</span><span>Início</span></button>
+    <button class="nav-item" data-page="insumos" onclick="navegar('insumos')"><span class="nav-icon">📦</span><span>Insumos</span></button>
+    <button class="nav-item" data-page="pa" onclick="navegar('pa')"><span class="nav-icon">🏭</span><span>PA</span></button>
+    <button class="nav-item" data-page="ops" onclick="navegar('ops')"><span class="nav-icon">📋</span><span>OPs</span></button>
+    <button class="nav-item" data-page="movimentos" onclick="navegar('movimentos')"><span class="nav-icon">🔄</span><span>Movimentos</span></button>
   </nav>
+</div>
 
-</div><!-- /app -->
+<!-- ══════════════════════════════════════════════════════
+     MODAL: DETALHE INSUMO
+══════════════════════════════════════════════════════ -->
+<div id="modal-insumo" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="detalhe-header">
+      <div class="item-card-icon insumo detalhe-icon">📦</div>
+      <div>
+        <div class="detalhe-code" id="det-ins-codigo"></div>
+        <div class="detalhe-name" id="det-ins-nome"></div>
+        <div class="detalhe-meta" id="det-ins-meta"></div>
+      </div>
+    </div>
+    <div class="saldo-grande">
+      <div class="saldo-numero" id="det-ins-saldo">—</div>
+      <div class="saldo-label">Saldo total</div>
+    </div>
+    <div class="section-header" style="padding-top:0"><span class="section-title">Endereços</span></div>
+    <div id="det-ins-enderecos" class="enderecos-list"></div>
+    <div class="acoes-detalhe">
+      <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
+      <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
+      <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
+    </div>
+  </div>
+</div>
 
-<!-- Scripts -->
+<!-- ══════════════════════════════════════════════════════
+     MODAL: MOVIMENTO INSUMO (ENTRADA/SAÍDA)
+══════════════════════════════════════════════════════ -->
+<div id="modal-mov-insumo" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="mov-ins-titulo">Registrar Movimento</span>
+      <button onclick="fecharModal('modal-mov-insumo')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+        <span style="color:var(--text-muted)">Item: </span>
+        <strong id="mov-ins-item"></strong>
+      </div>
+      <div class="field"><label>Quantidade</label>
+        <input id="mov-ins-qtde" type="number" min="0.01" step="0.01" placeholder="0">
+      </div>
+      <div class="field"><label>Observação (opcional)</label>
+        <input id="mov-ins-obs" type="text" placeholder="Ex: Compra NF 1234">
+      </div>
+      <div id="mov-ins-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-mov-insumo')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-mov-ins" onclick="confirmarMovimentoInsumo()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: DETALHE PA
+══════════════════════════════════════════════════════ -->
+<div id="modal-pa" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="detalhe-header">
+      <div class="item-card-icon pa detalhe-icon">🏭</div>
+      <div>
+        <div class="detalhe-code" id="det-pa-codigo"></div>
+        <div class="detalhe-name" id="det-pa-nome"></div>
+        <div class="detalhe-meta" id="det-pa-meta"></div>
+      </div>
+    </div>
+    <div class="saldo-grande">
+      <div class="saldo-numero" id="det-pa-saldo">—</div>
+      <div class="saldo-label">Saldo total</div>
+    </div>
+    <div class="section-header" style="padding-top:0"><span class="section-title">Endereços</span></div>
+    <div id="det-pa-enderecos" class="enderecos-list"></div>
+    <div class="section-header"><span class="section-title">Estrutura de Insumos</span></div>
+    <div id="det-pa-estrutura" class="item-list" style="margin-bottom:8px"></div>
+    <div class="acoes-detalhe">
+      <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
+      <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
+      <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: MOVIMENTO PA (ENTRADA/SAÍDA)
+══════════════════════════════════════════════════════ -->
+<div id="modal-mov-pa" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="mov-pa-titulo">Registrar Movimento PA</span>
+      <button onclick="fecharModal('modal-mov-pa')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+        <span style="color:var(--text-muted)">Item: </span><strong id="mov-pa-item"></strong>
+      </div>
+      <div id="mov-pa-preview-insumos" class="insumos-aviso" style="display:none">
+        ⚠️ Esta saída também baixará automaticamente os insumos da Estrutura de Produtos.
+      </div>
+      <div class="field"><label>Quantidade</label>
+        <input id="mov-pa-qtde" type="number" min="0.01" step="0.01" placeholder="0" oninput="atualizarPreviewPA()">
+      </div>
+      <div class="field"><label>Observação (opcional)</label>
+        <input id="mov-pa-obs" type="text" placeholder="Ex: OP 1234">
+      </div>
+      <div id="mov-pa-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-mov-pa')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-mov-pa" onclick="confirmarMovimentoPA()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: PAGAR OP — escolha do tipo
+══════════════════════════════════════════════════════ -->
+<div id="modal-op" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Pagar OP <span id="op-num-titulo" style="color:var(--accent)"></span></span>
+      <button onclick="fecharModal('modal-op')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6">
+        <div><span style="color:var(--text-muted)">Produto: </span><strong id="op-codigo-info"></strong></div>
+        <div><span style="color:var(--text-muted)">Descrição: </span><span id="op-desc-info"></span></div>
+        <div><span style="color:var(--text-muted)">Quantidade: </span><strong id="op-qtde-info"></strong></div>
+      </div>
+      <div class="section-header" style="padding:0 0 8px"><span class="section-title">Como pagar?</span></div>
+      <div class="op-tipo-cards">
+        <div class="op-tipo-card ins" onclick="escolherTipoPagamento('bom')">
+          <div class="card-icon">🔩</div>
+          <div class="card-label">Via BOM (Insumos)</div>
+        </div>
+        <div class="op-tipo-card pa" onclick="escolherTipoPagamento('pa')">
+          <div class="card-icon">🏭</div>
+          <div class="card-label">Via PA Direto</div>
+        </div>
+        <div class="op-tipo-card tri" onclick="escolherTipoPagamento('triangular')">
+          <div class="card-icon">🔄</div>
+          <div class="card-label">Triangular</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: BAIXA PA DIRETO (via OP)
+══════════════════════════════════════════════════════ -->
+<div id="modal-baixa-pa-op" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">Baixa PA — OP <span id="bpa-op-num" style="color:var(--accent)"></span></span>
+      <button onclick="fecharModal('modal-baixa-pa-op')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6">
+        <div><span style="color:var(--text-muted)">PA: </span><strong id="bpa-codigo"></strong></div>
+        <div><span style="color:var(--text-muted)">Saldo atual: </span><strong id="bpa-saldo" style="color:var(--success)"></strong></div>
+      </div>
+      <div class="insumos-aviso">
+        ⚠️ Esta baixa também registrará automaticamente a saída dos insumos da <strong>Estrutura de Produtos</strong>.
+      </div>
+      <div class="field"><label>Quantidade</label>
+        <input id="bpa-qtde" type="number" min="0.01" step="0.01" placeholder="0">
+      </div>
+      <div class="field"><label>Observação (opcional)</label>
+        <input id="bpa-obs" type="text" placeholder="">
+      </div>
+      <div id="bpa-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-baixa-pa-op')">Cancelar</button>
+      <button class="btn btn-pa btn-full" id="btn-confirmar-bpa" onclick="confirmarBaixaPAOp()">🏭 Confirmar Baixa PA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: TRIANGULAR
+══════════════════════════════════════════════════════ -->
+<div id="modal-triangular" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">🔄 Triangular — OP <span id="tri-op-num" style="color:var(--accent)"></span></span>
+      <button onclick="fecharModal('modal-triangular')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+        <span style="color:var(--text-muted)">Destino (produto da OP): </span><strong id="tri-destino"></strong>
+      </div>
+      <div class="field"><label>Código de Origem (PA base)</label>
+        <input id="tri-origem" type="text" placeholder="Ex: VTV-001" autocapitalize="characters" oninput="atualizarPreviewTriangular()">
+      </div>
+      <div class="field"><label>Quantidade</label>
+        <input id="tri-qtde" type="number" min="0.01" step="0.01" placeholder="0" oninput="atualizarPreviewTriangular()">
+      </div>
+      <div id="tri-preview" class="preview-box" style="display:none"></div>
+      <div class="insumos-aviso">
+        ⚠️ Os insumos da <strong>Estrutura de Produtos</strong> do produto destino serão baixados automaticamente.
+      </div>
+      <div id="tri-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-triangular')">Cancelar</button>
+      <button class="btn btn-full" id="btn-confirmar-tri" style="background:#7c3aed;color:#fff" onclick="confirmarTriangular()">🔄 Confirmar Triangular</button>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script>
-
 // ══════════════════════════════════════════════════════
 //  ESTADO GLOBAL
 // ══════════════════════════════════════════════════════
-let USUARIO      = null;
-let insumoCache  = [];
-let paCache      = [];
-let opsCache     = [];
+let USUARIO     = null;
+let insumoCache = [];
+let paCache     = [];
+let opsCache    = [];
+let _itemAtual  = null; // insumo ou PA aberto no detalhe
+let _opAtual    = null; // OP selecionada para pagamento
+let _movTipo    = '';   // 'ENTRADA' | 'SAIDA'
 
 // ══════════════════════════════════════════════════════
-//  API — fetch centralizado para o GAS
+//  API
 // ══════════════════════════════════════════════════════
 async function api(acao, dados = {}) {
-  const controller = new AbortController();
-  const timeout    = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
+  const ctrl = new AbortController();
+  const t    = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
   try {
     const res = await fetch(CONFIG.GAS_URL, {
-      method:  'POST',
-      signal:  controller.signal,
-      headers: { 'Content-Type': 'text/plain' }, // evita preflight CORS
-      body:    JSON.stringify({ acao, dados }),
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ acao, dados }),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     return await res.json();
-  } catch (e) {
+  } catch(e) {
     if (e.name === 'AbortError') throw new Error('Tempo esgotado. Verifique a conexão.');
     throw e;
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(t); }
 }
 
 // ══════════════════════════════════════════════════════
 //  TOAST
 // ══════════════════════════════════════════════════════
-let _toastTimer;
-function toast(msg, tipo = 'ok', duracao = 3000) {
+let _tt;
+function toast(msg, tipo = 'ok', dur = 3500) {
   const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className   = 'show ' + tipo;
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => { el.className = ''; }, duracao);
+  el.textContent = msg; el.className = 'show ' + tipo;
+  clearTimeout(_tt); _tt = setTimeout(() => el.className = '', dur);
+}
+
+// ══════════════════════════════════════════════════════
+//  MODAIS
+// ══════════════════════════════════════════════════════
+function abrirModal(id) {
+  document.getElementById(id).classList.add('open');
+}
+function fecharModal(id) {
+  document.getElementById(id).classList.remove('open');
 }
 
 // ══════════════════════════════════════════════════════
 //  NAVEGAÇÃO
 // ══════════════════════════════════════════════════════
+const TITULOS = { dashboard:'Controle de Estoque', insumos:'Insumos', pa:'Produtos Acabados', ops:'Ordens de Produção', movimentos:'Movimentos' };
+
 function navegar(pagina) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + pagina)?.classList.add('active');
   document.querySelector(`.nav-item[data-page="${pagina}"]`)?.classList.add('active');
-  document.getElementById('header-title').textContent = {
-    dashboard:  'Controle de Estoque',
-    insumos:    'Insumos',
-    pa:         'Produtos Acabados',
-    ops:        'Ordens de Produção',
-    movimentos: 'Movimentos',
-  }[pagina] || 'Controle de Estoque';
-
-  // Carrega dados ao navegar
+  document.getElementById('header-title').textContent = TITULOS[pagina] || 'Controle de Estoque';
   if (pagina === 'insumos'    && !insumoCache.length) carregarInsumos();
   if (pagina === 'pa'         && !paCache.length)     carregarPA();
   if (pagina === 'ops')                               carregarOPS();
@@ -814,40 +594,24 @@ function navegar(pagina) {
 // ══════════════════════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════════════════════
-document.getElementById('login-pass').addEventListener('keydown', e => {
-  if (e.key === 'Enter') fazerLogin();
-});
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') fazerLogin(); });
 
 async function fazerLogin() {
   const usuario = document.getElementById('login-user').value.trim();
   const senha   = document.getElementById('login-pass').value;
   const msg     = document.getElementById('login-msg');
   const btn     = document.getElementById('btn-login');
-
-  if (!usuario || !senha) {
-    mostrarMsg(msg, 'Preencha usuário e senha.', 'err');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>';
+  if (!usuario || !senha) { mostrarMsg(msg, 'Preencha usuário e senha.', 'err'); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   msg.className = 'msg';
-
   try {
     const res = await api('autenticar', { usuario, senha });
-    if (!res?.ok) {
-      mostrarMsg(msg, res?.mensagem || 'Usuário ou senha inválidos.', 'err');
-      return;
-    }
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Usuário ou senha inválidos.', 'err'); return; }
     USUARIO = res.usuario;
     sessionStorage.setItem('usuario', JSON.stringify(USUARIO));
     entrarNoApp();
-  } catch (e) {
-    mostrarMsg(msg, 'Erro de conexão: ' + e.message, 'err');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = 'Entrar';
-  }
+  } catch(e) { mostrarMsg(msg, 'Erro de conexão: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = 'Entrar'; }
 }
 
 function entrarNoApp() {
@@ -860,8 +624,7 @@ function entrarNoApp() {
 
 function logout() {
   if (!confirm('Deseja sair?')) return;
-  USUARIO = null;
-  insumoCache = []; paCache = []; opsCache = [];
+  USUARIO = null; insumoCache = []; paCache = []; opsCache = [];
   sessionStorage.clear();
   document.getElementById('header').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('visible');
@@ -873,20 +636,10 @@ function logout() {
 // ══════════════════════════════════════════════════════
 //  HELPERS
 // ══════════════════════════════════════════════════════
-function mostrarMsg(el, texto, tipo) {
-  el.textContent = texto;
-  el.className   = 'msg show ' + tipo;
-}
-
-function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-function saldoClass(saldo, min) {
-  if (saldo <= 0)        return 'zero';
-  if (saldo <= (min||0)) return 'low';
-  return 'ok';
-}
+function mostrarMsg(el, txt, tipo) { el.textContent = txt; el.className = 'msg show ' + tipo; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function saldoClass(s, min) { return s <= 0 ? 'zero' : s <= (min||0) ? 'low' : 'ok'; }
+function setBtn(id, disabled, html) { const b = document.getElementById(id); if(b){ b.disabled = disabled; if(html !== undefined) b.innerHTML = html; } }
 
 // ══════════════════════════════════════════════════════
 //  DASHBOARD
@@ -894,16 +647,22 @@ function saldoClass(saldo, min) {
 async function carregarDashboard() {
   if (!insumoCache.length) await carregarInsumos(true);
   if (!paCache.length)     await carregarPA(true);
-
   document.getElementById('dash-total-insumos').textContent = insumoCache.length;
   document.getElementById('dash-total-pa').textContent      = paCache.length;
-
-  const criticos = insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin || 0)).length;
+  const criticos = insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin||0) && i.estoqueMin > 0).length;
   document.getElementById('dash-criticos').textContent = criticos;
+}
+async function recarregarDashboard() {
+  insumoCache = []; paCache = [];
+  document.getElementById('dash-total-insumos').textContent = '…';
+  document.getElementById('dash-total-pa').textContent      = '…';
+  document.getElementById('dash-criticos').textContent      = '…';
+  await carregarDashboard();
+  toast('Dashboard atualizado');
 }
 
 // ══════════════════════════════════════════════════════
-//  INSUMOS
+//  INSUMOS — lista
 // ══════════════════════════════════════════════════════
 async function carregarInsumos(silencioso = false) {
   const lista = document.getElementById('lista-insumos');
@@ -912,44 +671,92 @@ async function carregarInsumos(silencioso = false) {
     const res = await api('listarCadastro');
     insumoCache = Array.isArray(res) ? res : (res?.itens || []);
     renderInsumos(insumoCache);
-  } catch (e) {
+  } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
 }
 
 function renderInsumos(itens) {
   const lista = document.getElementById('lista-insumos');
-  if (!itens.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Nenhum insumo encontrado.</div></div>';
-    return;
-  }
+  if (!itens.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Nenhum insumo encontrado.</div></div>'; return; }
   lista.innerHTML = itens.map(it => `
     <div class="item-card" onclick="abrirDetalheInsumo('${esc(it.codigo)}')">
       <div class="item-card-icon insumo">📦</div>
       <div class="item-card-body">
         <div class="item-card-code">${esc(it.codigo)}</div>
         <div class="item-card-name">${esc(it.descricao)}</div>
-        <div class="item-card-meta">${esc(it.tipo||'')} ${it.endereco ? '· '+esc(it.endereco) : ''}</div>
+        <div class="item-card-meta">${esc(it.tipo||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
       </div>
-      <div class="saldo-badge ${saldoClass(it.estoqueAtual, it.estoqueMin)}">${it.estoqueAtual}</div>
-    </div>
-  `).join('');
+      <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
+    </div>`).join('');
 }
 
-function filtrarInsumos(termo) {
-  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (!termos.length) { renderInsumos(insumoCache); return; }
-  const filtrados = insumoCache.filter(it =>
-    termos.every(t =>
-      it.codigo.toLowerCase().includes(t) ||
-      it.descricao.toLowerCase().includes(t)
-    )
-  );
-  renderInsumos(filtrados);
+function filtrarInsumos(t) {
+  const ts = t.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  renderInsumos(!ts.length ? insumoCache : insumoCache.filter(it => ts.every(x => it.codigo.toLowerCase().includes(x) || it.descricao.toLowerCase().includes(x))));
 }
 
 // ══════════════════════════════════════════════════════
-//  PA
+//  INSUMO — detalhe
+// ══════════════════════════════════════════════════════
+async function abrirDetalheInsumo(codigo) {
+  const it = insumoCache.find(i => i.codigo === codigo);
+  if (!it) return;
+  _itemAtual = { ...it, _tipo: 'insumo' };
+  document.getElementById('det-ins-codigo').textContent = it.codigo;
+  document.getElementById('det-ins-nome').textContent   = it.descricao;
+  document.getElementById('det-ins-meta').textContent   = [it.tipo, it.unidade].filter(Boolean).join(' · ');
+  document.getElementById('det-ins-saldo').textContent  = '…';
+  document.getElementById('det-ins-enderecos').innerHTML = '<div style="padding:8px 0;color:var(--text-muted);font-size:13px">Carregando endereços...</div>';
+  abrirModal('modal-insumo');
+  try {
+    const res = await api('obterEnderecosSaldo', { codigo });
+    document.getElementById('det-ins-saldo').textContent = res.saldo ?? 0;
+    const el = document.getElementById('det-ins-enderecos');
+    if (!res.enderecos?.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:13px">Sem estoque em endereços.</div>'; return; }
+    el.innerHTML = res.enderecos.map(e => `
+      <div class="endereco-row">
+        <span class="endereco-nome">📍 ${esc(e.endereco)}</span>
+        <span class="endereco-saldo">${e.saldo}</span>
+      </div>`).join('');
+  } catch(e) { document.getElementById('det-ins-saldo').textContent = '?'; }
+}
+
+function abrirMovimentoInsumo(tipo) {
+  if (!_itemAtual) return;
+  _movTipo = tipo;
+  document.getElementById('mov-ins-titulo').textContent = tipo === 'ENTRADA' ? '➕ Registrar Entrada' : '➖ Registrar Saída';
+  document.getElementById('mov-ins-item').textContent   = `${_itemAtual.codigo} — ${_itemAtual.descricao}`;
+  document.getElementById('mov-ins-qtde').value = '';
+  document.getElementById('mov-ins-obs').value  = '';
+  document.getElementById('mov-ins-msg').className = 'msg';
+  setBtn('btn-confirmar-mov-ins', false, 'Confirmar');
+  fecharModal('modal-insumo');
+  abrirModal('modal-mov-insumo');
+}
+
+async function confirmarMovimentoInsumo() {
+  const qtde = parseFloat(document.getElementById('mov-ins-qtde').value || 0);
+  const obs  = document.getElementById('mov-ins-obs').value.trim();
+  const msg  = document.getElementById('mov-ins-msg');
+  if (!qtde || qtde <= 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  setBtn('btn-confirmar-mov-ins', true, '<span class="spinner"></span>');
+  try {
+    const res = await api('gravarMovimento', {
+      codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
+      tipo: _movTipo, qtde, obs: obs || `${_movTipo} Manual`,
+      usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '', chave: '',
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    mostrarMsg(msg, '✔ Movimento registrado!', 'ok');
+    toast('✔ ' + (_movTipo === 'ENTRADA' ? 'Entrada' : 'Saída') + ' registrada!');
+    setTimeout(() => { fecharModal('modal-mov-insumo'); carregarInsumos(); }, 1500);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-mov-ins', false, 'Confirmar'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  PA — lista
 // ══════════════════════════════════════════════════════
 async function carregarPA(silencioso = false) {
   const lista = document.getElementById('lista-pa');
@@ -958,40 +765,122 @@ async function carregarPA(silencioso = false) {
     const res = await api('listarCadastroPA');
     paCache = Array.isArray(res) ? res : (res?.itens || []);
     renderPA(paCache);
-  } catch (e) {
+  } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
 }
 
 function renderPA(itens) {
   const lista = document.getElementById('lista-pa');
-  if (!itens.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Nenhum PA encontrado.</div></div>';
-    return;
-  }
+  if (!itens.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Nenhum PA encontrado.</div></div>'; return; }
   lista.innerHTML = itens.map(it => `
     <div class="item-card" onclick="abrirDetalhePA('${esc(it.codigo)}')">
       <div class="item-card-icon pa">🏭</div>
       <div class="item-card-body">
         <div class="item-card-code">${esc(it.codigo)}</div>
         <div class="item-card-name">${esc(it.descricao)}</div>
-        <div class="item-card-meta">${esc(it.familia||'')} ${it.endereco ? '· '+esc(it.endereco) : ''}</div>
+        <div class="item-card-meta">${esc(it.familia||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
       </div>
-      <div class="saldo-badge ${saldoClass(it.estoqueAtual, it.estoqueMin)}">${it.estoqueAtual}</div>
-    </div>
-  `).join('');
+      <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
+    </div>`).join('');
 }
 
-function filtrarPA(termo) {
-  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (!termos.length) { renderPA(paCache); return; }
-  const filtrados = paCache.filter(it =>
-    termos.every(t =>
-      it.codigo.toLowerCase().includes(t) ||
-      it.descricao.toLowerCase().includes(t)
-    )
-  );
-  renderPA(filtrados);
+function filtrarPA(t) {
+  const ts = t.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  renderPA(!ts.length ? paCache : paCache.filter(it => ts.every(x => it.codigo.toLowerCase().includes(x) || it.descricao.toLowerCase().includes(x))));
+}
+
+// ══════════════════════════════════════════════════════
+//  PA — detalhe
+// ══════════════════════════════════════════════════════
+async function abrirDetalhePA(codigo) {
+  const it = paCache.find(i => i.codigo === codigo);
+  if (!it) return;
+  _itemAtual = { ...it, _tipo: 'pa' };
+  document.getElementById('det-pa-codigo').textContent = it.codigo;
+  document.getElementById('det-pa-nome').textContent   = it.descricao;
+  document.getElementById('det-pa-meta').textContent   = [it.familia, it.unidade].filter(Boolean).join(' · ');
+  document.getElementById('det-pa-saldo').textContent  = '…';
+  document.getElementById('det-pa-enderecos').innerHTML  = '<div style="padding:8px;color:var(--text-muted);font-size:13px">Carregando...</div>';
+  document.getElementById('det-pa-estrutura').innerHTML  = '<div style="padding:0 0 8px;color:var(--text-muted);font-size:13px">Carregando estrutura...</div>';
+  abrirModal('modal-pa');
+  // Carrega saldo+enderecos e estrutura em paralelo
+  const [resEnd, resEst] = await Promise.allSettled([
+    api('obterEnderecosSaldoPA', { codigo }),
+    api('listarEstruturaProduto', { codigoPA: codigo }),
+  ]);
+  // Saldo + endereços
+  if (resEnd.status === 'fulfilled') {
+    const r = resEnd.value;
+    document.getElementById('det-pa-saldo').textContent = r.saldo ?? 0;
+    const el = document.getElementById('det-pa-enderecos');
+    el.innerHTML = r.enderecos?.length
+      ? r.enderecos.map(e => `<div class="endereco-row"><span class="endereco-nome">📍 ${esc(e.endereco)}</span><span class="endereco-saldo">${e.saldo}</span></div>`).join('')
+      : '<div style="padding:8px;color:var(--text-muted);font-size:13px">Sem estoque em endereços.</div>';
+  } else { document.getElementById('det-pa-saldo').textContent = '?'; }
+  // Estrutura de insumos
+  if (resEst.status === 'fulfilled' && resEst.value?.ok) {
+    const itens = resEst.value.itens || [];
+    const el    = document.getElementById('det-pa-estrutura');
+    el.innerHTML = itens.length
+      ? itens.map(i => `
+          <div class="item-card" style="cursor:default">
+            <div class="item-card-icon insumo" style="width:32px;height:32px;font-size:14px">🔩</div>
+            <div class="item-card-body">
+              <div class="item-card-code">${esc(i.codigoInsumo)}</div>
+              <div class="item-card-name" style="font-size:13px">${esc(i.descricao)}</div>
+            </div>
+            <div style="font-size:13px;font-family:var(--mono);color:var(--text-muted);flex-shrink:0">${i.qtdeUtilizada}</div>
+          </div>`).join('')
+      : '<div style="padding:8px;color:var(--text-muted);font-size:13px">Nenhum insumo na estrutura.</div>';
+  }
+}
+
+function abrirMovimentoPA(tipo) {
+  if (!_itemAtual) return;
+  _movTipo = tipo;
+  document.getElementById('mov-pa-titulo').textContent = tipo === 'ENTRADA' ? '➕ Entrada PA' : '➖ Baixa PA + Insumos';
+  document.getElementById('mov-pa-item').textContent   = `${_itemAtual.codigo} — ${_itemAtual.descricao}`;
+  document.getElementById('mov-pa-qtde').value  = '';
+  document.getElementById('mov-pa-obs').value   = '';
+  document.getElementById('mov-pa-msg').className = 'msg';
+  document.getElementById('mov-pa-preview-insumos').style.display = tipo === 'SAIDA' ? 'block' : 'none';
+  setBtn('btn-confirmar-mov-pa', false, 'Confirmar');
+  fecharModal('modal-pa');
+  abrirModal('modal-mov-pa');
+}
+
+function atualizarPreviewPA() { /* pode expandir para mostrar qtdes calculadas */ }
+
+async function confirmarMovimentoPA() {
+  const qtde = parseFloat(document.getElementById('mov-pa-qtde').value || 0);
+  const obs  = document.getElementById('mov-pa-obs').value.trim();
+  const msg  = document.getElementById('mov-pa-msg');
+  if (!qtde || qtde <= 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  setBtn('btn-confirmar-mov-pa', true, '<span class="spinner"></span>');
+  try {
+    const res = await api('gravarMovimentoPA', {
+      codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
+      tipo: _movTipo, qtde, obs: obs || `${_movTipo} Manual`,
+      usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '',
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    let textoSucesso = '✔ Movimento PA registrado!';
+    if (_movTipo === 'SAIDA' && res.insumos) {
+      const { gravados, avisos } = res.insumos;
+      if (gravados > 0) textoSucesso += ` + ${gravados} insumo(s) baixado(s).`;
+      if (avisos?.length) {
+        mostrarMsg(msg, textoSucesso + '\n⚠️ ' + avisos.join(' | '), 'warn');
+        toast('✔ PA baixado com avisos de insumos', 'warn');
+        setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 2500);
+        return;
+      }
+    }
+    mostrarMsg(msg, textoSucesso, 'ok');
+    toast(textoSucesso);
+    setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 1500);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1002,46 +891,158 @@ async function carregarOPS() {
   lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
   try {
     const res = await api('listarOPS');
-    opsCache = Array.isArray(res) ? res : (res?.ops || []);
+    opsCache  = Array.isArray(res) ? res : (res?.ops || []);
     renderOPS(opsCache);
-    document.getElementById('dash-ops').textContent =
-      opsCache.filter(o => o.posicao !== 'PAGO').length;
-  } catch (e) {
+    const abertas = opsCache.filter(o => o.posicao !== 'PAGO').length;
+    document.getElementById('dash-ops').textContent = abertas;
+  } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
 }
 
 function renderOPS(ops) {
-  const lista = document.getElementById('lista-ops');
+  const lista   = document.getElementById('lista-ops');
   const abertas = ops.filter(o => o.posicao !== 'PAGO');
-  if (!abertas.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP em aberto.</div></div>';
-    return;
-  }
+  if (!abertas.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP em aberto.</div></div>'; return; }
   lista.innerHTML = abertas.map(op => `
     <div class="item-card" onclick="abrirModalOP('${esc(op.op)}')">
-      <div class="item-card-icon ${op.isPA ? 'pa' : 'insumo'}">${op.isPA ? '🏭' : '📦'}</div>
+      <div class="item-card-icon ${op.isPA?'op-pa':'op-ins'}">${op.isPA?'🏭':'📦'}</div>
       <div class="item-card-body">
         <div class="item-card-code">OP ${esc(op.op)}</div>
         <div class="item-card-name">${esc(op.codigo)}</div>
-        <div class="item-card-meta">${esc(op.descricao)} · Qtde: ${op.qtde}</div>
+        <div class="item-card-meta">${esc(op.descricao)} · Qtde: <strong>${op.qtde}</strong></div>
       </div>
-      <span class="badge ${op.isPA ? 'badge-pa' : 'badge-insumo'}">${op.isPA ? 'PA' : 'INS'}</span>
-    </div>
-  `).join('');
+      <span class="badge ${op.isPA?'badge-pa':'badge-insumo'}">${op.isPA?'PA':'BOM'}</span>
+    </div>`).join('');
 }
 
-function filtrarOPS(termo) {
-  const termos = termo.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (!termos.length) { renderOPS(opsCache); return; }
-  const filtrados = opsCache.filter(op =>
-    termos.every(t =>
-      op.op.toLowerCase().includes(t) ||
-      op.codigo.toLowerCase().includes(t) ||
-      (op.descricao||'').toLowerCase().includes(t)
-    )
-  );
-  renderOPS(filtrados);
+function filtrarOPS(t) {
+  const ts = t.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  renderOPS(!ts.length ? opsCache : opsCache.filter(op => ts.every(x => op.op.toLowerCase().includes(x) || op.codigo.toLowerCase().includes(x) || (op.descricao||'').toLowerCase().includes(x))));
+}
+
+function abrirModalOP(opNum) {
+  const op = opsCache.find(o => o.op === opNum);
+  if (!op) return;
+  _opAtual = op;
+  document.getElementById('op-num-titulo').textContent  = op.op;
+  document.getElementById('op-codigo-info').textContent = op.codigo;
+  document.getElementById('op-desc-info').textContent   = op.descricao;
+  document.getElementById('op-qtde-info').textContent   = op.qtde;
+  abrirModal('modal-op');
+}
+
+function escolherTipoPagamento(tipo) {
+  fecharModal('modal-op');
+  if (tipo === 'bom')        { toast('Modal BOM — em breve', 'warn'); return; }
+  if (tipo === 'pa')         { abrirBaixaPAOp(); return; }
+  if (tipo === 'triangular') { abrirTriangular(); return; }
+}
+
+// ══════════════════════════════════════════════════════
+//  BAIXA PA VIA OP
+// ══════════════════════════════════════════════════════
+async function abrirBaixaPAOp() {
+  if (!_opAtual) return;
+  document.getElementById('bpa-op-num').textContent  = _opAtual.op;
+  document.getElementById('bpa-codigo').textContent  = _opAtual.codigo;
+  document.getElementById('bpa-saldo').textContent   = '…';
+  document.getElementById('bpa-qtde').value          = _opAtual.qtde || '';
+  document.getElementById('bpa-obs').value           = '';
+  document.getElementById('bpa-msg').className       = 'msg';
+  setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA');
+  abrirModal('modal-baixa-pa-op');
+  try {
+    const res = await api('obterEnderecosSaldoPA', { codigo: _opAtual.codigo });
+    document.getElementById('bpa-saldo').textContent = res.saldo ?? '?';
+  } catch(e) { document.getElementById('bpa-saldo').textContent = '?'; }
+}
+
+async function confirmarBaixaPAOp() {
+  const qtde = parseFloat(document.getElementById('bpa-qtde').value || 0);
+  const obs  = document.getElementById('bpa-obs').value.trim();
+  const msg  = document.getElementById('bpa-msg');
+  if (!qtde || qtde <= 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  setBtn('btn-confirmar-bpa', true, '<span class="spinner"></span>');
+  try {
+    const res = await api('gravarMovimentoPA', {
+      codigo: _opAtual.codigo, descricao: _opAtual.descricao,
+      tipo: 'SAIDA', qtde, op: _opAtual.op,
+      obs: obs || 'Baixa PA — OP ' + _opAtual.op,
+      usuario: USUARIO.nome || USUARIO.usuario, qrcode: '',
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    let texto = `✔ PA baixado! (${qtde} un.)`;
+    if (res.insumos?.gravados > 0) texto += ` + ${res.insumos.gravados} insumo(s).`;
+    if (res.insumos?.avisos?.length) {
+      mostrarMsg(msg, texto + '\n⚠️ ' + res.insumos.avisos.join(' | '), 'warn');
+      toast('✔ Baixado com avisos', 'warn');
+    } else {
+      mostrarMsg(msg, texto, 'ok');
+      toast(texto);
+    }
+    setTimeout(() => { fecharModal('modal-baixa-pa-op'); carregarOPS(); carregarPA(); }, 1800);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  TRIANGULAR
+// ══════════════════════════════════════════════════════
+function abrirTriangular() {
+  if (!_opAtual) return;
+  document.getElementById('tri-op-num').textContent = _opAtual.op;
+  document.getElementById('tri-destino').textContent = `${_opAtual.codigo} — ${_opAtual.descricao}`;
+  document.getElementById('tri-origem').value = '';
+  document.getElementById('tri-qtde').value   = _opAtual.qtde || '';
+  document.getElementById('tri-preview').style.display = 'none';
+  document.getElementById('tri-msg').className = 'msg';
+  setBtn('btn-confirmar-tri', false, '🔄 Confirmar Triangular');
+  abrirModal('modal-triangular');
+}
+
+function atualizarPreviewTriangular() {
+  const origem  = document.getElementById('tri-origem').value.trim().toUpperCase();
+  const destino = _opAtual?.codigo || '';
+  const qtde    = parseFloat(document.getElementById('tri-qtde').value || 0);
+  const preview = document.getElementById('tri-preview');
+  if (!origem || !qtde || qtde <= 0 || !destino) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  preview.innerHTML = `
+    <div class="preview-row"><span>1. ${esc(origem)}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
+    <div class="preview-row"><span>2. ${esc(destino)}</span><span class="preview-tipo-entrada">ENTRADA ${qtde}</span></div>
+    <div class="preview-row"><span>3. ${esc(destino)}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">+ Insumos de ${esc(destino)} serão baixados automaticamente</div>`;
+}
+
+async function confirmarTriangular() {
+  const codOrigem  = document.getElementById('tri-origem').value.trim().toUpperCase();
+  const codDestino = _opAtual?.codigo || '';
+  const qtde       = parseFloat(document.getElementById('tri-qtde').value || 0);
+  const msg        = document.getElementById('tri-msg');
+  if (!codOrigem)       { mostrarMsg(msg, 'Informe o código de origem.', 'err'); return; }
+  if (!qtde || qtde<=0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  if (codOrigem === codDestino) { mostrarMsg(msg, 'Origem e destino não podem ser iguais.', 'err'); return; }
+  if (!confirm(`Confirmar Triangular da OP ${_opAtual.op}?\n\n1) ${codOrigem} → SAÍDA ${qtde}\n2) ${codDestino} → ENTRADA ${qtde}\n3) ${codDestino} → SAÍDA ${qtde}\n\nInsumos de ${codDestino} serão baixados automaticamente.`)) return;
+  setBtn('btn-confirmar-tri', true, '<span class="spinner"></span>');
+  try {
+    const res = await api('pagarTriangular', {
+      codOrigem, codDestino, qtde, op: _opAtual.op,
+      usuario: USUARIO.nome || USUARIO.usuario,
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    let texto = `✔ Triangular gravado! 3 movimentos registrados.`;
+    if (res.insumos?.gravados > 0) texto += ` + ${res.insumos.gravados} insumo(s) baixado(s).`;
+    if (res.insumos?.avisos?.length) {
+      mostrarMsg(msg, texto + '\n⚠️ ' + res.insumos.avisos.join(' | '), 'warn');
+      toast('✔ Triangular com avisos de insumos', 'warn');
+    } else {
+      mostrarMsg(msg, texto, 'ok');
+      toast(texto);
+    }
+    setTimeout(() => { fecharModal('modal-triangular'); carregarOPS(); carregarPA(); }, 2000);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-tri', false, '🔄 Confirmar Triangular'); }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1052,71 +1053,38 @@ async function carregarMovimentos() {
   const tipo  = document.getElementById('filtro-mov-tipo').value;
   lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⏳</div><div class="empty-state-text">Carregando...</div></div>';
   try {
-    const acao = tipo === 'pa' ? 'listarMovimentosPA' : tipo === 'insumo' ? 'listarMovimentos' : 'listarMovimentos';
-    const res  = await api(acao);
-    const movs = (Array.isArray(res) ? res : []).slice(-50).reverse(); // últimos 50
-    if (!movs.length) {
-      lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-text">Nenhum movimento encontrado.</div></div>';
-      return;
-    }
+    const res  = await api(tipo === 'pa' ? 'listarMovimentosPA' : 'listarMovimentos');
+    const movs = (Array.isArray(res) ? res : []).slice(-60).reverse();
+    if (!movs.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-text">Nenhum movimento.</div></div>'; return; }
     lista.innerHTML = movs.map(m => `
-      <div class="item-card">
+      <div class="item-card" style="cursor:default">
         <div class="item-card-body">
-          <div class="item-card-code">${esc(m.data)} ${m.op ? '· OP '+esc(m.op) : ''}</div>
+          <div class="item-card-code">${esc(m.data)}${m.op?' · OP '+esc(m.op):''}</div>
           <div class="item-card-name">${esc(m.codigo)} — ${esc(m.descricao)}</div>
           <div class="item-card-meta">${esc(m.obs||'')} · ${esc(m.usuario||'')}</div>
         </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <span class="badge badge-${m.tipo?.toLowerCase()==='entrada'?'entrada':'saida'}">${esc(m.tipo)}</span>
+        <div style="text-align:right;flex-shrink:0">
+          <span class="badge badge-${(m.tipo||'').toLowerCase()==='entrada'?'entrada':'saida'}">${esc(m.tipo)}</span>
           <div class="saldo-badge ok" style="margin-top:4px">${m.qtde}</div>
         </div>
-      </div>
-    `).join('');
-  } catch (e) {
+      </div>`).join('');
+  } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
   }
 }
 
 // ══════════════════════════════════════════════════════
-//  PLACEHOLDERS — expandir nas próximas iterações
-// ══════════════════════════════════════════════════════
-function abrirDetalheInsumo(codigo) {
-  toast('Detalhe de insumo — em breve: ' + codigo, 'warn');
-}
-function abrirDetalhePA(codigo) {
-  toast('Detalhe de PA — em breve: ' + codigo, 'warn');
-}
-function abrirModalOP(op) {
-  toast('Modal de OP — em breve: ' + op, 'warn');
-}
-
-// ══════════════════════════════════════════════════════
-//  PWA — Service Worker
+//  PWA + INIT
 // ══════════════════════════════════════════════════════
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
 
-// ══════════════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
-  // Tenta restaurar sessão
   const saved = sessionStorage.getItem('usuario');
-  if (saved) {
-    try {
-      USUARIO = JSON.parse(saved);
-      entrarNoApp();
-    } catch { sessionStorage.clear(); }
-  }
-  // Remove loading splash
-  setTimeout(() => {
-    document.getElementById('loading-overlay').classList.add('hidden');
-  }, 400);
+  if (saved) { try { USUARIO = JSON.parse(saved); entrarNoApp(); } catch { sessionStorage.clear(); } }
+  setTimeout(() => document.getElementById('loading-overlay').classList.add('hidden'), 400);
 });
-
 </script>
 </body>
 </html>
