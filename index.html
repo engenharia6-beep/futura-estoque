@@ -1253,8 +1253,8 @@ function renderOPS(ops) {
           </div>
         </div>
         <div class="op-row-btns">
-          <button class="btn-silk btn-silk-metal" data-acao="metal" data-zpl="${esc(op.zpl)}">🖨 Metal</button>
-          <button class="btn-silk" data-acao="op" data-zpl="${esc(op.zpl)}">🖨 OP</button>
+          <button class="btn-silk btn-silk-metal" data-acao="metal" data-zpl="${esc(op.zplMetal||'')}">🖨 Metal</button>
+          <button class="btn-silk" data-acao="op" data-zpl="${esc(op.zpl||'')}">🖨 OP</button>
           <button class="btn-pagar-op ${btnClass}" data-acao="${op.estado!=='PAGO'?'pagar':''}">${btnLabel}</button>
           <div class="op-row-btns-right">
             ${op.obs  ? `<span class="op-obs-label">📝 ${esc(op.obs)}</span>` : ''}
