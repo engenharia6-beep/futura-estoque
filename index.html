@@ -1279,7 +1279,8 @@ function _bindOPsClicks() {
       e.stopPropagation();
       const acao = btn.dataset.acao;
       const zpl  = btn.dataset.zpl || '';
-      if (acao === 'metal' || acao === 'op') { imprimirSilkOP(opNum, zpl); return; }
+      if (acao === 'metal') { imprimirSilkMetal(opNum, zpl); return; }
+      if (acao === 'op')    { imprimirSilkOP(opNum, zpl);    return; }
       if (acao === 'pagar') { abrirModalOP(opNum); return; }
       return;
     }
@@ -1302,14 +1303,16 @@ function filtrarOPS(t) {
 
 function imprimirSilkOP(op, zpl) {
   if (!zpl) { toast('Sem ZPL para esta OP', 'warn'); return; }
-  api('imprimirZPL', { op, zpl })
+  api('imprimirZPL', { op, zpl, impressora: 'OP' })
     .then(r => toast(r?.ok ? `✔ Etiqueta OP ${op} enviada!` : `⚠️ ${r?.mensagem}`, r?.ok ? 'ok' : 'err'))
     .catch(e => toast('Erro: ' + e.message, 'err'));
 }
 
 function imprimirSilkMetal(op, zpl) {
-  // Reutiliza mesma impressora — ajuste se tiver impressora diferente para metal
-  imprimirSilkOP(op, zpl);
+  if (!zpl) { toast('Sem ZPL para esta OP', 'warn'); return; }
+  api('imprimirZPL', { op, zpl, impressora: 'METAL' })
+    .then(r => toast(r?.ok ? `✔ Metalizada OP ${op} enviada!` : `⚠️ ${r?.mensagem}`, r?.ok ? 'ok' : 'err'))
+    .catch(e => toast('Erro: ' + e.message, 'err'));
 }
 
 function abrirModalOP(opNum) {
@@ -1689,7 +1692,7 @@ async function confirmarGravarInsumos() {
       // BOM — separa insumos e PA, usa baixarBOMComTipo
       res = await api('baixarBOMComTipo', {
         movimentos: itens.map(it => ({
-          codigo:    it.codigoInsumo,
+          codigo:    it.codigoInsumo || it.codigo, // BOM retorna .codigo, PA retorna .codigoInsumo
           descricao: it.descricao,
           tipoMov:   it.tipoMov || 'INSUMO',
           qtdBaixar: it.qtdeBaixar,
