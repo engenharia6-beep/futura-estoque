@@ -1678,7 +1678,7 @@ async function confirmarGravarInsumos() {
     })
     .filter(it => it.qtdeBaixar > 0);
 
-  if (!itens.length) {
+  if (!itensSelecionados.length) {
     mostrarMsg(msg, 'Nenhum item com quantidade para baixar.', 'warn');
     return;
   }
@@ -1691,8 +1691,8 @@ async function confirmarGravarInsumos() {
     if (_contextoInsumos?.tipo === 'bom') {
       // BOM — separa insumos e PA, usa baixarBOMComTipo
       res = await api('baixarBOMComTipo', {
-        movimentos: itens.map(it => ({
-          codigo:    it.codigoInsumo || it.codigo, // BOM retorna .codigo, PA retorna .codigoInsumo
+        movimentos: itensSelecionados.map(it => ({
+          codigo:    it.codigoInsumo || it.codigo,
           descricao: it.descricao,
           tipoMov:   it.tipoMov || 'INSUMO',
           qtdBaixar: it.qtdeBaixar,
@@ -1700,13 +1700,12 @@ async function confirmarGravarInsumos() {
         dadosBase: { op: _contextoInsumos.op||'', usuario: _contextoInsumos.usuario||'', computer:'', localizacao:'', ip:'', chaveIdem },
       });
       if (res?.ok) {
-        const g = (res.gravados || 0);
-        res.gravados = g; // normaliza para msg abaixo
+        res.gravados = res.gravados || 0;
       }
     } else {
       // PA / Triangular — todos são insumos
       res = await api('gravarBaixaInsumos', {
-        itens,
+        itens: itensSelecionados,
         dadosBase: { op: _contextoInsumos.op||'', usuario: _contextoInsumos.usuario||'', computer:'', localizacao:'', ip:'', chaveIdem },
       });
     }
