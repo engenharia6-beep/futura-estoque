@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    @page { margin: 0; }
+    body {
+      font-family: "Arial", sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: white;
+    }
+
+    .cartao-container {
+      border: 3px solid #000;
+      border-radius: 40px;
+      width: 750px;
+      height: 320px;
+      box-sizing: border-box;
+      display: flex;
+      overflow: hidden;
+      margin-bottom: 30px;
+      page-break-inside: avoid;
+    }
+
+    /* --- LADO ESQUERDO (FOTO) --- */
+    .col-esquerda {
+      width: 40%;
+      border-right: 3px solid #000;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      background-color: #fff;
+    }
+
+    .foto-produto {
+      width: 95%;
+      height: auto;
+      max-height: 220px;
+      object-fit: contain;
+    }
+
+    .qr-flutuante {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      width: 70px;
+      height: 70px;
+      background-color: white;
+      padding: 2px;
+    }
+
+    /* --- LADO DIREITO (DADOS) --- */
+    .col-direita {
+      width: 60%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* LINHA 1: LOGO e ENDEREÇO */
+    .linha-topo {
+      min-height: 54px;
+      max-height: 80px;
+      border-bottom: 2px solid #000;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 15px;
+      overflow: hidden;
+    }
+    .logo-img { height: 36px; object-fit: contain; flex-shrink: 0; }
+
+    /* Endereço: fonte adaptável */
+    .endereco-texto {
+      font-weight: 900;
+      color: #000;
+      text-align: right;
+      line-height: 1.15;
+      word-break: break-word;
+      max-width: 68%;
+    }
+
+    /* LINHA 2: CÓDIGO */
+    .linha-codigo {
+      padding: 5px 15px;
+      border-bottom: 2px solid #000;
+      font-size: 40px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* LINHA 3: DESCRIÇÃO */
+    .linha-descricao {
+      flex: 1;
+      padding: 5px 15px;
+      border-bottom: 2px solid #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 16px;
+      font-weight: bold;
+      text-transform: uppercase;
+      line-height: 1.2;
+      overflow: hidden;
+    }
+
+    /* LINHA 4: OBSERVAÇÃO */
+    .linha-obs {
+      height: 40px;
+      padding: 5px 15px;
+      font-size: 12px;
+      font-weight: bold;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <? for (var i = 0; i < lista.length; i++) { ?>
+    <? var dados = lista[i]; ?>
+
+    <?
+      // ── Cálculo automático do tamanho da fonte do endereço ──────────────
+      // Divide por vírgula ou quebra de linha para contar endereços
+      var endStr = dados.enderecos || '';
+      var endParts = endStr.split(/[,\n]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s; });
+      var numEnd = endParts.length;
+      var maxLen = 0;
+      for (var e = 0; e < endParts.length; e++) {
+        if (endParts[e].length > maxLen) maxLen = endParts[e].length;
+      }
+      // Regras: 1 endereço curto = 36px, médio = 28px; múltiplos = menor
+      var endFontSize;
+      if (numEnd === 1) {
+        endFontSize = maxLen <= 6  ? '36px'
+                    : maxLen <= 9  ? '28px'
+                    : maxLen <= 12 ? '22px'
+                    :                '16px';
+      } else if (numEnd <= 3) {
+        endFontSize = maxLen <= 7 ? '22px' : '16px';
+      } else if (numEnd <= 6) {
+        endFontSize = '13px';
+      } else {
+        endFontSize = '11px';
+      }
+      // Formata o endereço: múltiplos ficam em linhas separadas
+      var endHtml = endParts.join('<br>');
+    ?>
+
+    <div class="cartao-container">
+
+      <!-- LADO ESQUERDO -->
+      <div class="col-esquerda">
+        <? if (dados.img) { ?>
+          <img src="<?!= dados.img ?>" class="foto-produto" />
+        <? } else { ?>
+          <span style="color:#ccc;font-size:13px;text-align:center;">SEM FOTO</span>
+        <? } ?>
+
+        <? if (dados.qrcode) { ?>
+          <img src="<?!= dados.qrcode ?>" class="qr-flutuante" />
+        <? } ?>
+      </div>
+
+      <!-- LADO DIREITO -->
+      <div class="col-direita">
+
+        <!-- 1. Logo e Endereço -->
+        <div class="linha-topo">
+          <? if (dados.logo) { ?>
+            <img src="<?!= dados.logo ?>" class="logo-img" />
+          <? } else { ?>
+            <span style="font-weight:bold;font-size:14px;">FUTURA</span>
+          <? } ?>
+          <div class="endereco-texto" style="font-size: <?= endFontSize ?>;">
+            <?!= endHtml ?>
+          </div>
+        </div>
+
+        <!-- 2. Código -->
+        <div class="linha-codigo">
+          <?= dados.codigo ?>
+        </div>
+
+        <!-- 3. Descrição -->
+        <div class="linha-descricao">
+          <?= dados.detalhe ?>
+        </div>
+
+        <!-- 4. Observação -->
+        <div class="linha-obs">
+          <span>Obs.: <span style="font-weight:normal"><?= dados.obs ?></span></span>
+        </div>
+
+      </div>
+
+    </div>
+  <? } ?>
+
+</body>
+</html>

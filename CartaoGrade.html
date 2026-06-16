@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { 
+    size: A4;
+    margin: 0; 
+  }
+
+  body {
+    font-family: "Arial", sans-serif;
+    margin: 0;
+    padding-top: 5mm;  
+    padding-left: 5mm; 
+    padding-right: 5mm;
+    background-color: white;
+  }
+
+  table.grade-tabela {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 3mm 0mm;
+    table-layout: fixed;
+  }
+
+  td.celula-etiqueta {
+    width: 50%;
+    height: 57mm;
+    vertical-align: top;
+    padding-bottom: 1mm;
+  }
+
+  .etiqueta {
+    border: 3px solid #000;
+    border-radius: 15px;
+    box-sizing: border-box;
+    display: flex;
+    overflow: hidden;
+    height: 56mm; 
+    width: 100%;
+  }
+
+  /* LADO ESQUERDO */
+  .lado-esquerdo {
+    width: 42%;
+    border-right: 2px solid #000;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .area-foto {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    overflow: hidden;
+  }
+  .img-produto {
+    max-width: 95%;
+    max-height: 35mm;
+    object-fit: contain;
+  }
+
+  /* Área inferior esquerda: endereço + QR */
+  .area-inferior-esq {
+    min-height: 12mm;
+    max-height: 20mm;
+    border-top: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+    overflow: hidden;
+  }
+
+  /* Endereço adaptável no layout P */
+  .texto-local {
+    font-weight: 900;
+    text-transform: uppercase;
+    line-height: 1.1;
+    word-break: break-word;
+    flex: 1;
+  }
+
+  .qr-mini {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-left: 3px;
+  }
+
+  /* LADO DIREITO */
+  .lado-direito {
+    width: 58%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .area-logo {
+    height: 12mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .img-logo {
+    max-height: 10mm;
+    max-width: 90%;
+  }
+
+  .area-titulo {
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    text-align: center;
+    padding: 2px 0;
+    background-color: #fff;
+  }
+  .texto-titulo {
+    font-size: 16px;
+    font-weight: 900;
+    line-height: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .area-descricao {
+    flex-grow: 1;
+    padding: 2px 4px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .texto-desc {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    line-height: 1.1;
+  }
+
+  .area-obs {
+    border-top: 2px solid #000;
+    min-height: 10mm;
+    font-size: 9px;
+    padding-left: 4px;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 3px;
+    overflow: hidden;
+  }
+
+</style>
+</head>
+<body>
+
+<?
+  // Função auxiliar: calcula fonte do endereço para layout P (menor)
+  function calcFonteSizeP(endStr) {
+    var parts = endStr.split(/[,\n]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s; });
+    var num   = parts.length;
+    var maxL  = 0;
+    for (var i = 0; i < parts.length; i++) { if (parts[i].length > maxL) maxL = parts[i].length; }
+    if (num === 1) {
+      return maxL <= 6 ? '18px' : maxL <= 9 ? '14px' : '11px';
+    } else if (num <= 3) {
+      return maxL <= 7 ? '13px' : '10px';
+    } else {
+      return '9px';
+    }
+  }
+  function formatEndereco(endStr) {
+    return endStr.split(/[,\n]+/).map(function(s){ return s.trim(); }).filter(function(s){ return s; }).join('<br>');
+  }
+?>
+
+<table class="grade-tabela">
+  <? 
+    for (var i = 0; i < lista.length; i += 2) { 
+      var item1 = lista[i];
+      var item2 = (i + 1 < lista.length) ? lista[i + 1] : null;
+      var end1FontSize = calcFonteSizeP(item1.enderecos || '');
+      var end1Html     = formatEndereco(item1.enderecos || '');
+      var end2FontSize = item2 ? calcFonteSizeP(item2.enderecos || '') : '18px';
+      var end2Html     = item2 ? formatEndereco(item2.enderecos || '') : '';
+  ?>
+    <tr>
+      <!-- COLUNA 1 -->
+      <td class="celula-etiqueta">
+        <div class="etiqueta">
+          <div class="lado-esquerdo">
+            <div class="area-foto">
+              <? if (item1.img) { ?>
+                <img src="<?!= item1.img ?>" class="img-produto" />
+              <? } else { ?>
+                <span style="color:#ccc;font-size:9px;text-align:center;">SEM FOTO</span>
+              <? } ?>
+            </div>
+            <div class="area-inferior-esq">
+              <div class="texto-local" style="font-size: <?= end1FontSize ?>;">
+                <?!= end1Html ?>
+              </div>
+              <? if (item1.qrcode) { ?>
+                <img src="<?!= item1.qrcode ?>" class="qr-mini" />
+              <? } ?>
+            </div>
+          </div>
+          <div class="lado-direito">
+            <div class="area-logo">
+              <? if (item1.logo) { ?>
+                <img src="<?!= item1.logo ?>" class="img-logo" />
+              <? } else { ?>
+                <span style="font-weight:bold; font-size:14px">FUTURA</span>
+              <? } ?>
+            </div>
+            <div class="area-titulo"><div class="texto-titulo"><?= item1.codigo ?></div></div>
+            <div class="area-descricao"><div class="texto-desc"><?= item1.detalhe ?></div></div>
+            <div class="area-obs"><strong>Obs:</strong>&nbsp;<?= item1.obs ?></div>
+          </div>
+        </div>
+      </td>
+
+      <!-- COLUNA 2 -->
+      <td class="celula-etiqueta">
+        <? if (item2) { ?>
+          <div class="etiqueta">
+            <div class="lado-esquerdo">
+              <div class="area-foto">
+                <? if (item2.img) { ?>
+                  <img src="<?!= item2.img ?>" class="img-produto" />
+                <? } else { ?>
+                  <span style="color:#ccc;font-size:9px;text-align:center;">SEM FOTO</span>
+                <? } ?>
+              </div>
+              <div class="area-inferior-esq">
+                <div class="texto-local" style="font-size: <?= end2FontSize ?>;">
+                  <?!= end2Html ?>
+                </div>
+                <? if (item2.qrcode) { ?>
+                  <img src="<?!= item2.qrcode ?>" class="qr-mini" />
+                <? } ?>
+              </div>
+            </div>
+            <div class="lado-direito">
+              <div class="area-logo">
+                <? if (item2.logo) { ?>
+                  <img src="<?!= item2.logo ?>" class="img-logo" />
+                <? } else { ?>
+                  <span style="font-weight:bold; font-size:14px">FUTURA</span>
+                <? } ?>
+              </div>
+              <div class="area-titulo"><div class="texto-titulo"><?= item2.codigo ?></div></div>
+              <div class="area-descricao"><div class="texto-desc"><?= item2.detalhe ?></div></div>
+              <div class="area-obs"><strong>Obs:</strong>&nbsp;<?= item2.obs ?></div>
+            </div>
+          </div>
+        <? } ?>
+      </td>
+    </tr>
+  <? } ?>
+</table>
+
+</body>
+</html>
