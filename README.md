@@ -236,3 +236,70 @@ Abra o link → compartilhar (□↑) → "Adicionar à Tela de Início"
 - O CSS do `modal-overlay` é crítico — não usar `sed` em blocos grandes do `index.html`
 - O service worker antigo trava tudo — sempre fazer Unregister antes de testar versão nova
 - Fotos do Drive precisam estar compartilhadas individualmente como públicas
+
+
+
+
+
+
+Que ótima notícia! Vou ajustar o resumo então.
+
+## Resumo Completo — Projeto 1: futura-estoque (16/06/2026) — ✅ Concluído
+
+---
+
+### 📁 Repositório GitHub
+**`engenharia6-beep/futura-estoque`** → `https://engenharia6-beep.github.io/futura-estoque/`
+PWA instalável, tema verde-azulado (`#1a5c5a` accent, `#f0f4f5` fundo)
+
+### 📜 Apps Script
+Backend executado como `USER_DEPLOYING`, acesso `ANYONE_ANONYMOUS`
+
+---
+
+### ✅ Tudo funcionando
+- Login, Dashboard, Insumos, PA, OPs, Movimentos
+- Detalhe Insumo/PA com foto banner
+- Pagar OP: BOM, PA Direto, Triangular — gravação em bloco otimizada
+- Botões Metal/OP nas OPs com impressoras corretas
+- Botões +G/+P direto nos cards de Insumos e PA, com badge de contagem na fila
+- Fila de impressão de cartões (cartão grande G e grade A4 P)
+- Impressão de etiqueta ZPL avulsa
+- Permissão do Drive autorizada — fotos aparecem corretamente nos cartões
+- Auto-refresh nas OPs, idempotência de gravação
+
+---
+
+## 📦 Arquivos no GitHub (`/mnt/user-data/outputs/futura-estoque/`)
+
+| Arquivo | Função |
+|---|---|
+| `index.html` | App completo |
+| `Code_novo.gs` | Backend (cópia de backup) |
+| `config.js` | URL do Web App |
+| `manifest.json` | PWA |
+| `sw.js` | Service Worker v2 |
+| `README.md` | Documentação |
+| `Cartao.html` | Template cartão grande — backup |
+| `CartaoGrade.html` | Template grade A4 — backup |
+| `appsscript.json` | Manifesto com oauthScopes — backup |
+| `assets/` | Ícone do PWA |
+
+## 📜 Apps Script (colados manualmente)
+
+| Arquivo | Status |
+|---|---|
+| `Code_novo.gs` | ✅ |
+| `Cartao.html` | ✅ |
+| `CartaoGrade.html` | ✅ |
+| `appsscript.json` | ✅ (oauthScopes autorizados) |
+
+---
+
+### ⚠️ Lembretes técnicos (válidos para próximas sessões)
+- Após push: `sessionStorage.clear(); caches.keys().then(k=>k.forEach(c=>caches.delete(c))); location.reload(true);`
+- CSS `.modal-overlay` é sensível — usar `str_replace` cirúrgico, nunca `sed` em blocos grandes
+- Alterações no `.gs`/`.html` do Apps Script exigem novo deploy
+- `Code_novo.gs` e os `.html` de cartão são colados manualmente no Apps Script — não vêm do git push
+
+**Projeto 1 está estável e completo.** Pronto para focar 100% no Projeto 2 (futura-relatorios) na próxima conversa.
