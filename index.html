@@ -111,8 +111,9 @@
     .search-input{width:100%;height:40px;padding:0 14px 0 38px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:20px;color:var(--text);font-size:14px;transition:border-color var(--transition);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.242 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center}
     .search-input:focus{border-color:var(--border-focus);outline:none}
     .item-list{padding:0 16px;display:flex;flex-direction:column;gap:8px}
-    .item-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:border-color var(--transition),background var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .item-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px;cursor:pointer;transition:border-color var(--transition),background var(--transition),box-shadow var(--transition);-webkit-tap-highlight-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.06)}
     .item-card:active{background:var(--bg-hover)}
+    .item-card-row{display:flex;align-items:center;gap:12px}
     .item-card-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
     .item-card-icon.insumo{background:var(--ins-light)}
     .item-card-icon.pa{background:var(--pa-light)}
@@ -126,6 +127,14 @@
     .saldo-badge.ok{color:var(--success)}
     .saldo-badge.low{color:var(--warning)}
     .saldo-badge.zero{color:var(--danger)}
+    /* ── Botões de impressão rápida no card ── */
+    .item-card-print{display:flex;gap:8px;border-top:1px solid var(--border);padding-top:10px;margin-left:52px}
+    .btn-print-mini{position:relative;height:30px;padding:0 12px;border-radius:6px;font-size:11px;font-weight:700;background:#f0f6f6;color:var(--accent);border:1px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;gap:5px;transition:background .15s}
+    .btn-print-mini:active{background:#e0eeee}
+    .btn-print-mini.g{color:#1a5c5a}
+    .btn-print-mini.p{color:#4a6a6a}
+    .fila-badge{display:none;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;align-items:center;justify-content:center;padding:0 4px}
+    .fila-badge.show{display:flex}
     .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
     .badge-insumo{background:rgba(26,115,232,.2);color:#60a5fa}
     .badge-pa{background:rgba(15,110,86,.2);color:#34d399}
@@ -879,15 +888,22 @@ function renderInsumos(itens) {
       : `<div class="item-foto-placeholder insumo">📦</div>`;
     return `
     <div class="item-card" onclick="abrirDetalheInsumo('${esc(it.codigo)}')">
-      ${fotoHtml}
-      <div class="item-card-body">
-        <div class="item-card-code">${esc(it.codigo)}</div>
-        <div class="item-card-name">${esc(it.descricao)}</div>
-        <div class="item-card-meta">${esc(it.tipo||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
+      <div class="item-card-row">
+        ${fotoHtml}
+        <div class="item-card-body">
+          <div class="item-card-code">${esc(it.codigo)}</div>
+          <div class="item-card-name">${esc(it.descricao)}</div>
+          <div class="item-card-meta">${esc(it.tipo||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
+        </div>
+        <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
       </div>
-      <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
+      <div class="item-card-print">
+        <button class="btn-print-mini g" onclick="adicionarFilaDireto('${esc(it.codigo)}','insumo','G',event)">🖨️ +G <span class="fila-badge" data-codigo="${esc(it.codigo)}" data-layout="G">0</span></button>
+        <button class="btn-print-mini p" onclick="adicionarFilaDireto('${esc(it.codigo)}','insumo','P',event)">🖨️ +P <span class="fila-badge" data-codigo="${esc(it.codigo)}" data-layout="P">0</span></button>
+      </div>
     </div>`;
   }).join('');
+  _sincronizarBadgesFila();
 }
 
 function filtrarInsumos(t) {
@@ -1022,15 +1038,22 @@ function renderPA(itens) {
       : `<div class="item-foto-placeholder pa">🏭</div>`;
     return `
     <div class="item-card" onclick="abrirDetalhePA('${esc(it.codigo)}')">
-      ${fotoHtml}
-      <div class="item-card-body">
-        <div class="item-card-code">${esc(it.codigo)}</div>
-        <div class="item-card-name">${esc(it.descricao)}</div>
-        <div class="item-card-meta">${esc(it.familia||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
+      <div class="item-card-row">
+        ${fotoHtml}
+        <div class="item-card-body">
+          <div class="item-card-code">${esc(it.codigo)}</div>
+          <div class="item-card-name">${esc(it.descricao)}</div>
+          <div class="item-card-meta">${esc(it.familia||'')}${it.endereco?' · '+esc(it.endereco):''}</div>
+        </div>
+        <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
       </div>
-      <div class="saldo-badge ${saldoClass(it.estoqueAtual,it.estoqueMin)}">${it.estoqueAtual}</div>
+      <div class="item-card-print">
+        <button class="btn-print-mini g" onclick="adicionarFilaDireto('${esc(it.codigo)}','pa','G',event)">🖨️ +G <span class="fila-badge" data-codigo="${esc(it.codigo)}" data-layout="G">0</span></button>
+        <button class="btn-print-mini p" onclick="adicionarFilaDireto('${esc(it.codigo)}','pa','P',event)">🖨️ +P <span class="fila-badge" data-codigo="${esc(it.codigo)}" data-layout="P">0</span></button>
+      </div>
     </div>`;
   }).join('');
+  _sincronizarBadgesFila();
 }
 
 function filtrarPA(t) {
@@ -1075,12 +1098,14 @@ async function abrirDetalhePA(codigo) {
     el.innerHTML = itens.length
       ? itens.map(i => `
           <div class="item-card" style="cursor:default">
-            <div class="item-card-icon insumo" style="width:32px;height:32px;font-size:14px">🔩</div>
-            <div class="item-card-body">
-              <div class="item-card-code">${esc(i.codigoInsumo)}</div>
-              <div class="item-card-name" style="font-size:13px">${esc(i.descricao)}</div>
+            <div class="item-card-row">
+              <div class="item-card-icon insumo" style="width:32px;height:32px;font-size:14px">🔩</div>
+              <div class="item-card-body">
+                <div class="item-card-code">${esc(i.codigoInsumo)}</div>
+                <div class="item-card-name" style="font-size:13px">${esc(i.descricao)}</div>
+              </div>
+              <div style="font-size:13px;font-family:var(--mono);color:var(--text-muted);flex-shrink:0">${i.qtdeUtilizada}</div>
             </div>
-            <div style="font-size:13px;font-family:var(--mono);color:var(--text-muted);flex-shrink:0">${i.qtdeUtilizada}</div>
           </div>`).join('')
       : '<div style="padding:8px;color:var(--text-muted);font-size:13px">Nenhum insumo na estrutura.</div>';
   }
@@ -1538,14 +1563,16 @@ async function carregarMovimentos() {
     if (!movs.length) { lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔄</div><div class="empty-state-text">Nenhum movimento.</div></div>'; return; }
     lista.innerHTML = movs.map(m => `
       <div class="item-card" style="cursor:default">
-        <div class="item-card-body">
-          <div class="item-card-code">${esc(m.data)}${m.op?' · OP '+esc(m.op):''}</div>
-          <div class="item-card-name">${esc(m.codigo)} — ${esc(m.descricao)}</div>
-          <div class="item-card-meta">${esc(m.obs||'')} · ${esc(m.usuario||'')}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <span class="badge badge-${(m.tipo||'').toLowerCase()==='entrada'?'entrada':'saida'}">${esc(m.tipo)}</span>
-          <div class="saldo-badge ok" style="margin-top:4px">${m.qtde}</div>
+        <div class="item-card-row">
+          <div class="item-card-body">
+            <div class="item-card-code">${esc(m.data)}${m.op?' · OP '+esc(m.op):''}</div>
+            <div class="item-card-name">${esc(m.codigo)} — ${esc(m.descricao)}</div>
+            <div class="item-card-meta">${esc(m.obs||'')} · ${esc(m.usuario||'')}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <span class="badge badge-${(m.tipo||'').toLowerCase()==='entrada'?'entrada':'saida'}">${esc(m.tipo)}</span>
+            <div class="saldo-badge ok" style="margin-top:4px">${m.qtde}</div>
+          </div>
         </div>
       </div>`).join('');
   } catch(e) {
@@ -1752,12 +1779,44 @@ function adicionarFila(layout) {
   if (!_itemAtual) return;
   const tipo   = _itemAtual._tipo; // 'insumo' | 'pa'
   const codigo = _itemAtual.codigo;
-  // Evita duplicata do mesmo layout
-  const jaExiste = _filaImpressao.find(i => i.codigo === codigo && i.layout === layout);
-  if (jaExiste) { toast(`"${codigo}" (${layout}) já está na fila`, 'warn'); return; }
   _filaImpressao.push({ codigo, tipo, layout });
   _atualizarBarraFila();
   toast(`✔ ${codigo} adicionado à fila (${layout})`);
+}
+
+// Adiciona à fila direto do card da lista (Insumos/PA), sem abrir o detalhe.
+// Cada clique soma +1 cópia. Atualiza o badge de contagem no próprio botão.
+function adicionarFilaDireto(codigo, tipo, layout, ev) {
+  if (ev) ev.stopPropagation();
+  _filaImpressao.push({ codigo, tipo, layout });
+  _atualizarBarraFila();
+  _atualizarBadgeCard(codigo, layout);
+  toast(`✔ ${codigo} (${layout}) +1 na fila`, 'ok', 1800);
+}
+
+function _qtdFila(codigo, layout) {
+  return _filaImpressao.filter(i => i.codigo === codigo && i.layout === layout).length;
+}
+
+function _atualizarBadgeCard(codigo, layout) {
+  const qtd = _qtdFila(codigo, layout);
+  const badge = document.querySelector(`.fila-badge[data-codigo="${CSS.escape(codigo)}"][data-layout="${layout}"]`);
+  if (badge) {
+    badge.textContent = qtd;
+    badge.classList.toggle('show', qtd > 0);
+  }
+}
+
+// Após (re)renderizar uma lista, sincroniza todos os badges visíveis
+// com a quantidade real de cada item já presente na fila de impressão.
+function _sincronizarBadgesFila() {
+  if (!_filaImpressao.length) return;
+  document.querySelectorAll('.fila-badge').forEach(badge => {
+    const codigo = badge.dataset.codigo;
+    const layout = badge.dataset.layout;
+    const qtd = _qtdFila(codigo, layout);
+    if (qtd > 0) { badge.textContent = qtd; badge.classList.add('show'); }
+  });
 }
 
 function _atualizarBarraFila() {
@@ -1778,6 +1837,7 @@ function _atualizarBarraFila() {
 function limparFila() {
   _filaImpressao = [];
   _atualizarBarraFila();
+  document.querySelectorAll('.fila-badge').forEach(b => { b.textContent = '0'; b.classList.remove('show'); });
   toast('Fila limpa');
 }
 
@@ -1805,8 +1865,13 @@ async function imprimirFila(layout) {
     if (erros.length) {
       toast('⚠️ ' + erros.join(' | '), 'err', 6000);
     } else {
-      // Remove os impressos da fila
+      // Remove os impressos da fila e zera os badges correspondentes
+      const codigosLayout = new Set(itens.map(i => i.codigo + '|' + i.layout));
       _filaImpressao = _filaImpressao.filter(i => i.layout !== layout);
+      codigosLayout.forEach(cl => {
+        const [codigo] = cl.split('|');
+        _atualizarBadgeCard(codigo, layout);
+      });
       _atualizarBarraFila();
       toast(`✔ ${itens.length} cartão(ns) enviado(s) para impressão!`);
     }
