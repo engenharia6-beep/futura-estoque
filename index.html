@@ -51,7 +51,7 @@
     #btn-logout:hover{color:#fff}
     #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;min-height:0}
     #bottom-nav{height:var(--nav-h);background:#1a5c5a;border-top:none;display:none;flex-shrink:0;box-shadow:0 -2px 8px rgba(0,0,0,.12)}
-    #bottom-nav.visible{display:grid;grid-template-columns:repeat(5,1fr)}
+    #bottom-nav.visible{display:grid;grid-template-columns:repeat(6,1fr)}
     .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;color:rgba(255,255,255,.6);font-size:10px;font-weight:600;padding:6px 4px;transition:color var(--transition);-webkit-tap-highlight-color:transparent}
     .nav-item .nav-icon{font-size:20px;line-height:1}
     .nav-item.active{color:#fff}
@@ -231,6 +231,14 @@
     .endereco-nome{font-size:13px;font-family:var(--mono)}
     .endereco-saldo{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--success)}
     .acoes-detalhe{padding:20px;display:flex;flex-direction:column;gap:10px}
+
+    /* ── BOM table ── */
+    .bom-table{width:100%;border-collapse:collapse;font-size:12px}
+    .bom-table th{background:var(--accent);color:#fff;padding:8px 6px;text-align:left;font-size:11px;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:1}
+    .bom-table td{padding:7px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
+    .bom-table tr:nth-child(even) td{background:#f5fafa}
+    .bom-estoque-ok{color:var(--success);font-weight:700;font-family:var(--mono)}
+    .bom-estoque-low{color:var(--danger);font-weight:700;font-family:var(--mono)}
 
     /* ── Modal OP ── */
     .op-tipo-cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:0 20px}
@@ -414,6 +422,16 @@
       </div>
     </div>
 
+    <!-- ══ BOM ══ -->
+    <div id="page-bom" class="page">
+      <div class="search-wrap">
+        <input class="search-input" id="search-bom" type="search" placeholder="Código ou descrição do PA..." oninput="filtrarBOM(this.value)">
+      </div>
+      <div id="lista-bom" class="item-list">
+        <div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">Carregando...</div></div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 
   <nav id="bottom-nav">
@@ -422,6 +440,7 @@
     <button class="nav-item" data-page="pa" onclick="navegar('pa')"><span class="nav-icon">🏭</span><span>PA</span></button>
     <button class="nav-item" data-page="ops" onclick="navegar('ops')"><span class="nav-icon">📋</span><span>OPs</span></button>
     <button class="nav-item" data-page="movimentos" onclick="navegar('movimentos')"><span class="nav-icon">🔄</span><span>Movimentos</span></button>
+    <button class="nav-item" data-page="bom" onclick="navegar('bom')"><span class="nav-icon">📊</span><span>BOM</span></button>
   </nav>
 </div>
 
@@ -703,6 +722,41 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════
+     MODAL: CONSULTA BOM
+══════════════════════════════════════════════════════ -->
+<div id="modal-bom" class="modal-overlay">
+  <div class="modal-sheet" style="max-height:95vh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">BOM — <span id="bom-modal-codigo" style="color:var(--accent)"></span></span>
+      <button onclick="fecharModal('modal-bom')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;padding:10px 16px 10px;background:var(--bg);border-bottom:1px solid var(--border)">
+      <div id="bom-modal-foto" style="width:52px;height:52px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg-card);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:28px">🏭</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;line-height:1.3" id="bom-modal-desc"></div>
+      </div>
+    </div>
+    <div style="overflow-x:auto;padding:0 0 20px">
+      <table class="bom-table">
+        <thead>
+          <tr>
+            <th style="width:28px;text-align:center">Nº</th>
+            <th style="width:44px">Foto</th>
+            <th>Código</th>
+            <th>Descrição</th>
+            <th>Endereço</th>
+            <th style="width:44px;text-align:center">USO</th>
+            <th style="width:60px;text-align:right;padding-right:10px">Estoque</th>
+          </tr>
+        </thead>
+        <tbody id="bom-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ══ BARRA DE FILA DE IMPRESSÃO ══ -->
 <div id="fila-bar">
   <div>
@@ -779,7 +833,7 @@ function fecharModal(id) {
 // ══════════════════════════════════════════════════════
 //  NAVEGAÇÃO
 // ══════════════════════════════════════════════════════
-const TITULOS = { dashboard:'Controle de Estoque', insumos:'Insumos', pa:'Produtos Acabados', ops:'Ordens de Produção', movimentos:'Movimentos' };
+const TITULOS = { dashboard:'Controle de Estoque', insumos:'Insumos', pa:'Produtos Acabados', ops:'Ordens de Produção', movimentos:'Movimentos', bom:'Consulta BOM' };
 
 function navegar(pagina) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -792,6 +846,7 @@ function navegar(pagina) {
   if (pagina === 'ops')                               carregarOPS(false);
   if (pagina === 'movimentos')                        carregarMovimentos();
   if (pagina === 'dashboard')                         carregarDashboard();
+  if (pagina === 'bom')                               carregarBOM();
 }
 
 // ══════════════════════════════════════════════════════
@@ -1885,6 +1940,99 @@ async function imprimirFila(layout) {
     toast('Erro ao imprimir: ' + e.message, 'err');
   } finally {
     barra.style.opacity = '1';
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  BOM — Consulta Estrutura de Produtos
+// ══════════════════════════════════════════════════════
+function carregarBOM() {
+  if (!paCache.length) {
+    carregarPA().then(() => _renderBOMPage(paCache));
+  } else {
+    _renderBOMPage(paCache);
+  }
+}
+
+function filtrarBOM(termo) {
+  const t = (termo || '').toLowerCase().trim();
+  const lista = t ? paCache.filter(p => (p.codigo + ' ' + p.descricao).toLowerCase().includes(t)) : paCache;
+  _renderBOMPage(lista);
+}
+
+function _renderBOMPage(lista) {
+  const el = document.getElementById('lista-bom');
+  if (!lista.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">Nenhum PA encontrado.</div></div>';
+    return;
+  }
+  el.innerHTML = lista.map(it => `
+    <div class="item-card" onclick="abrirBOM('${esc(it.codigo)}')">
+      <div class="item-card-row">
+        <div class="item-card-icon pa">${it.fotoUrl ? `<img src="${esc(_normalizarFotoUrl(it.fotoUrl))}" style="width:100%;height:100%;object-fit:contain" onerror="this.style.display='none'">` : '🏭'}</div>
+        <div class="item-card-body">
+          <div class="item-card-code">${esc(it.codigo)}</div>
+          <div class="item-card-name">${esc(it.descricao)}</div>
+          <div class="item-card-meta">${esc(it.familia || '')}${it.endereco ? ' · ' + esc(it.endereco) : ''}</div>
+        </div>
+        <div class="saldo-badge ${saldoClass(it.estoqueAtual, it.estoqueMin)}">${it.estoqueAtual}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function abrirBOM(codigo) {
+  const pa = paCache.find(p => p.codigo === codigo);
+  if (!pa) return;
+
+  document.getElementById('bom-modal-codigo').textContent = pa.codigo;
+  document.getElementById('bom-modal-desc').textContent   = pa.descricao;
+
+  const fotoWrap = document.getElementById('bom-modal-foto');
+  fotoWrap.innerHTML = '🏭';
+  if (pa.fotoUrl) {
+    const img = document.createElement('img');
+    img.src = _normalizarFotoUrl(pa.fotoUrl);
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain';
+    img.onerror = () => { fotoWrap.textContent = '🏭'; };
+    fotoWrap.innerHTML = '';
+    fotoWrap.appendChild(img);
+  }
+
+  document.getElementById('bom-tbody').innerHTML =
+    '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)"><span class="spinner" style="border-top-color:var(--accent)"></span> Carregando...</td></tr>';
+
+  abrirModal('modal-bom');
+
+  try {
+    const res = await api('listarEstruturaProduto', { codigoPA: codigo });
+    if (!res?.ok || !res.itens?.length) {
+      document.getElementById('bom-tbody').innerHTML =
+        '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text-muted)">Nenhum insumo na estrutura.</td></tr>';
+      return;
+    }
+    document.getElementById('bom-tbody').innerHTML = res.itens.map((it, idx) => {
+      const cached  = insumoCache.find(x => x.codigo === it.codigoInsumo) || paCache.find(x => x.codigo === it.codigoInsumo);
+      const end     = cached?.endereco || '';
+      const est     = cached?.estoqueAtual ?? '?';
+      const min     = cached?.estoqueMin  ?? 0;
+      const estClass = est === '?' ? '' : (Number(est) <= 0 ? 'bom-estoque-low' : Number(est) <= Number(min) ? 'bom-estoque-low' : 'bom-estoque-ok');
+      const fotoHtml = cached?.fotoUrl
+        ? `<img src="${esc(_normalizarFotoUrl(cached.fotoUrl))}" style="width:36px;height:36px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'">`
+        : `<div style="width:36px;height:36px;border-radius:6px;border:1px solid var(--border);background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:16px">🔩</div>`;
+      return `
+        <tr>
+          <td style="text-align:center;color:var(--text-muted);font-size:11px">${String(idx + 1).padStart(2, '0')}</td>
+          <td>${fotoHtml}</td>
+          <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${esc(it.codigoInsumo)}</td>
+          <td style="font-size:12px">${esc(it.descricao)}</td>
+          <td style="font-size:10px;font-family:var(--mono);color:var(--accent)">${esc(end)}</td>
+          <td style="text-align:center;font-family:var(--mono);font-size:12px">${it.qtdeUtilizada}</td>
+          <td style="text-align:right;padding-right:10px" class="${estClass}">${est}</td>
+        </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('bom-tbody').innerHTML =
+      `<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--danger)">Erro: ${esc(e.message)}</td></tr>`;
   }
 }
 
