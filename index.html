@@ -578,6 +578,7 @@
           <div><span style="color:var(--text-muted)">Produto: </span><strong id="op-codigo-info"></strong></div>
           <div><span style="color:var(--text-muted)">Descrição: </span><span id="op-desc-info" style="font-size:12px"></span></div>
           <div><span style="color:var(--text-muted)">Quantidade: </span><strong id="op-qtde-info"></strong></div>
+          <div id="op-endereco-info-wrap" style="display:none"><span style="color:var(--text-muted)">Endereço: </span><strong id="op-endereco-info" style="font-family:var(--mono);color:var(--accent)"></strong></div>
         </div>
       </div>
       <div class="section-header" style="padding:0 0 8px"><span class="section-title">Como pagar?</span></div>
@@ -1348,6 +1349,10 @@ function abrirModalOP(opNum) {
   document.getElementById('op-codigo-info').textContent = op.codigo;
   document.getElementById('op-desc-info').textContent   = op.descricao;
   document.getElementById('op-qtde-info').textContent   = op.qtde;
+  const _endPA = (paCache.find(p => p.codigo === op.codigo) || insumoCache.find(i => i.codigo === op.codigo))?.endereco || '';
+  const _wrapEnd = document.getElementById('op-endereco-info-wrap');
+  document.getElementById('op-endereco-info').textContent = _endPA;
+  if (_wrapEnd) _wrapEnd.style.display = _endPA ? '' : 'none';
   // Foto no modal
   const wrap = document.getElementById('op-modal-foto-wrap');
   if (wrap) {
@@ -1416,6 +1421,7 @@ async function abrirModalBOM() {
         <div class="ins-confirm-nome">
           <div class="ins-confirm-codigo">${esc(it.codigo)} <span class="badge ${it.tipoMov==='PA'?'badge-pa':'badge-insumo'}">${esc(it.tipoMov||'INS')}</span></div>
           <div>${esc(it.descricao)}</div>
+          ${(()=>{const _e=(it.tipoMov==='PA'?paCache:insumoCache).find(x=>x.codigo===it.codigo)?.endereco;return _e?`<div style="font-size:11px;color:var(--accent);font-family:var(--mono)">📍 ${esc(_e)}</div>`:''})()}
         </div>
         <div class="ins-saldo">${it.saldoAtual}</div>
         <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdBaixar}</div>
