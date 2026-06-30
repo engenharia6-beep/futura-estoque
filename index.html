@@ -807,21 +807,44 @@ function _gerarChave() {
 
 let _requisicaoEmAndamento = false; // trava global para operações críticas
 
+async function _apiFetch(acao, dados, signal) {
+  const res = await fetch(CONFIG.GAS_URL, {
+    method: 'POST', signal,
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ acao, dados }),
+  });
+  if (!res.ok) throw Object.assign(new Error('HTTP ' + res.status), { httpStatus: res.status });
+  return res.json();
+}
+
 async function api(acao, dados = {}) {
-  const ctrl = new AbortController();
-  const t    = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
-  try {
-    const res = await fetch(CONFIG.GAS_URL, {
-      method: 'POST', signal: ctrl.signal,
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ acao, dados }),
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
-  } catch(e) {
-    if (e.name === 'AbortError') throw new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.');
-    throw e;
-  } finally { clearTimeout(t); }
+  const MAX = 3;
+  let ultimoErro;
+  for (let tentativa = 1; tentativa <= MAX; tentativa++) {
+    const ctrl = new AbortController();
+    const t    = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+    try {
+      const result = await _apiFetch(acao, dados, ctrl.signal);
+      clearTimeout(t);
+      return result;
+    } catch(e) {
+      clearTimeout(t);
+      ultimoErro = e;
+      if (e.name === 'AbortError') {
+        throw new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.');
+      }
+      // Retenta em 404 ou erro de rede — espera 4s antes da próxima tentativa
+      const retentar = (e.httpStatus === 404 || e.name === 'TypeError') && tentativa < MAX;
+      if (!retentar) break;
+      toast(`⏳ Tentativa ${tentativa}/${MAX} falhou (${e.message}). Aguardando...`, 'warn', 4000);
+      await new Promise(r => setTimeout(r, 4000));
+    }
+  }
+  if (ultimoErro?.httpStatus === 404) {
+    throw new Error('Servidor não encontrado (404). Verifique se o Apps Script está publicado e tente novamente.');
+  }
+  throw ultimoErro;
 }
 
 // ══════════════════════════════════════════════════════
@@ -1570,7 +1593,7 @@ async function confirmarBaixaPAOp() {
 // ══════════════════════════════════════════════════════
 //  TRIANGULAR
 // ══════════════════════════════════════════════════════
-function abrirTriangular() {
+async function abrirTriangular() {
   if (!_opAtual) return;
   document.getElementById('tri-op-num').textContent = _opAtual.op;
   document.getElementById('tri-destino').textContent = `${_opAtual.codigo} — ${_opAtual.descricao}`;
@@ -1578,8 +1601,20 @@ function abrirTriangular() {
   document.getElementById('tri-qtde').value   = _opAtual.qtde || '';
   document.getElementById('tri-preview').style.display = 'none';
   document.getElementById('tri-msg').className = 'msg';
+  document.getElementById('tri-msg').textContent = '';
+  document.getElementById('btn-confirmar-tri').disabled = false;
   setBtn('btn-confirmar-tri', false, '🔄 Confirmar Triangular');
   abrirModal('modal-triangular');
+  // Carrega caches silenciosamente se ainda não foram carregados,
+  // para que o saldo da origem apareça quando o usuário digitar o código
+  const cargas = [];
+  if (!paCache.length)     cargas.push(carregarPA(true));
+  if (!insumoCache.length) cargas.push(carregarInsumos(true));
+  if (cargas.length) {
+    await Promise.all(cargas);
+    // Atualiza o preview caso o usuário já tenha digitado algo enquanto carregava
+    atualizarPreviewTriangular();
+  }
 }
 
 function atualizarPreviewTriangular() {
@@ -1587,10 +1622,46 @@ function atualizarPreviewTriangular() {
   const destino = _opAtual?.codigo || '';
   const qtde    = parseFloat(document.getElementById('tri-qtde').value || 0);
   const preview = document.getElementById('tri-preview');
-  if (!origem || !qtde || qtde <= 0 || !destino) { preview.style.display = 'none'; return; }
+  const msg     = document.getElementById('tri-msg');
+  const btnConf = document.getElementById('btn-confirmar-tri');
+
+  if (!origem || !qtde || qtde <= 0 || !destino) {
+    preview.style.display = 'none';
+    msg.className = 'msg';
+    msg.textContent = '';
+    btnConf.disabled = false;
+    return;
+  }
+
+  // Busca saldo no cache (PA tem prioridade sobre insumo)
+  const itemOrigem  = paCache.find(p => p.codigo === origem) || insumoCache.find(i => i.codigo === origem);
+  const saldoAtual  = itemOrigem ? (itemOrigem.estoqueAtual ?? 0) : null;
+  const suficiente  = saldoAtual !== null && saldoAtual >= qtde;
+  const naoEncontrado = saldoAtual === null;
+
+  // Atualiza mensagem de validação
+  if (naoEncontrado) {
+    msg.className = 'msg warn';
+    msg.textContent = `⚠️ Código "${origem}" não encontrado no cache. Verifique o código antes de confirmar.`;
+    btnConf.disabled = false; // Permite confirmar mesmo assim (pode estar desatualizado)
+  } else if (!suficiente) {
+    msg.className = 'msg err';
+    msg.textContent = `Saldo insuficiente: ${saldoAtual} disponível, necessário ${qtde}.`;
+    btnConf.disabled = true;
+  } else {
+    msg.className = 'msg';
+    msg.textContent = '';
+    btnConf.disabled = false;
+  }
+
+  // Tag de saldo colorida
+  const saldoTag = naoEncontrado
+    ? `<span style="font-size:11px;color:var(--text-muted);margin-left:6px">saldo desconhecido</span>`
+    : `<span style="font-size:11px;font-weight:600;margin-left:6px;color:${suficiente ? 'var(--ok)' : 'var(--danger)'}">saldo: ${saldoAtual}</span>`;
+
   preview.style.display = 'block';
   preview.innerHTML = `
-    <div class="preview-row"><span>1. ${esc(origem)}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
+    <div class="preview-row"><span>1. ${esc(origem)}${saldoTag}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
     <div class="preview-row"><span>2. ${esc(destino)}</span><span class="preview-tipo-entrada">ENTRADA ${qtde}</span></div>
     <div class="preview-row"><span>3. ${esc(destino)}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
     <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">+ Insumos de ${esc(destino)} serão baixados automaticamente</div>`;
@@ -1604,6 +1675,11 @@ async function confirmarTriangular() {
   if (!codOrigem)       { mostrarMsg(msg, 'Informe o código de origem.', 'err'); return; }
   if (!qtde || qtde<=0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
   if (codOrigem === codDestino) { mostrarMsg(msg, 'Origem e destino não podem ser iguais.', 'err'); return; }
+  const _itemOrig = paCache.find(p => p.codigo === codOrigem) || insumoCache.find(i => i.codigo === codOrigem);
+  if (_itemOrig && (_itemOrig.estoqueAtual ?? 0) < qtde) {
+    mostrarMsg(msg, `Saldo insuficiente: ${_itemOrig.estoqueAtual} disponível, necessário ${qtde}.`, 'err');
+    return;
+  }
   if (!confirm(`Confirmar Triangular da OP ${_opAtual.op}?\n\n1) ${codOrigem} → SAÍDA ${qtde}\n2) ${codDestino} → ENTRADA ${qtde}\n3) ${codDestino} → SAÍDA ${qtde}`)) return;
   setBtn('btn-confirmar-tri', true, '<span class="spinner"></span>');
   try {
@@ -1691,30 +1767,35 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
     const temInsuficiente = res.itens.some(i => !i.suficiente);
     if (temInsuficiente) {
       const av = document.getElementById('ins-confirm-aviso');
-      av.textContent = '⚠️ Itens em vermelho estão com saldo insuficiente. Você pode ajustar as quantidades ou confirmar assim mesmo.';
+      av.textContent = '⚠️ Itens com saldo insuficiente estão bloqueados (desmarcados). Só serão baixados os itens com saldo suficiente.';
       av.style.display = 'block';
     }
 
-    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => `
-      <div class="ins-confirm-row ${!it.suficiente ? 'sem-saldo' : ''}" id="ins-row-${idx}">
+    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => {
+      const bloqueado = !it.suficiente;
+      return `
+      <div class="ins-confirm-row ${bloqueado ? 'sem-saldo desmarcado' : ''}" id="ins-row-${idx}">
         <input type="checkbox" class="ins-chk ins-item-chk" id="ins-chk-${idx}"
-          checked data-idx="${idx}"
+          ${bloqueado ? '' : 'checked'} ${bloqueado ? 'disabled' : ''} data-idx="${idx}"
           onchange="toggleInsumoRow(${idx}, this.checked)">
         <div class="ins-confirm-nome">
           <div class="ins-confirm-codigo">${esc(it.codigoInsumo)}</div>
           <div>${esc(it.descricao)}</div>
+          ${bloqueado ? `<div style="font-size:10px;color:var(--danger);margin-top:2px">Saldo insuficiente — bloqueado</div>` : ''}
         </div>
-        <div class="ins-saldo">${it.saldoAtual}</div>
+        <div class="ins-saldo" style="${bloqueado ? 'color:var(--danger);font-weight:700' : ''}">${it.saldoAtual}</div>
         <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdeNecessaria}</div>
-        <input class="ins-qtde-input ${!it.suficiente ? 'insuf' : ''}"
+        <input class="ins-qtde-input ${bloqueado ? 'insuf' : ''}"
           id="ins-qtde-${idx}"
           type="number" min="0" step="0.01"
-          value="${it.qtdeNecessaria}"
+          value="${bloqueado ? 0 : it.qtdeNecessaria}"
+          ${bloqueado ? 'disabled' : ''}
           data-codigo="${esc(it.codigoInsumo)}"
           data-descricao="${esc(it.descricao)}"
           data-saldo="${it.saldoAtual}"
           oninput="validarQtdeInsumo(this, ${it.saldoAtual})">
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     atualizarContadorInsumos();
 
@@ -1748,6 +1829,7 @@ function toggleInsumoRow(idx, marcado) {
 
 function toggleTodosInsumos(marcado) {
   document.querySelectorAll('.ins-item-chk').forEach(chk => {
+    if (chk.disabled) return; // mantém bloqueados intocados
     const idx = parseInt(chk.dataset.idx);
     chk.checked = marcado;
     toggleInsumoRow(idx, marcado);
@@ -1755,10 +1837,12 @@ function toggleTodosInsumos(marcado) {
 }
 
 function atualizarContadorInsumos() {
-  const marcados = document.querySelectorAll('.ins-item-chk:checked').length;
-  const total    = document.querySelectorAll('.ins-item-chk').length;
+  const todos     = document.querySelectorAll('.ins-item-chk');
+  const disponiveis = Array.from(todos).filter(c => !c.disabled).length;
+  const marcados  = document.querySelectorAll('.ins-item-chk:checked').length;
+  const bloqueados = Array.from(todos).filter(c => c.disabled).length;
   const el = document.getElementById('ins-selecionados-count');
-  if (el) el.textContent = `${marcados} de ${total} selecionados`;
+  if (el) el.textContent = `${marcados} de ${disponiveis} selecionados${bloqueados ? ` · ${bloqueados} bloqueado(s)` : ''}`;
 }
 
 async function confirmarGravarInsumos() {
