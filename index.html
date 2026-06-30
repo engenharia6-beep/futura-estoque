@@ -1490,7 +1490,7 @@ async function abrirModalBOM() {
   abrirModal('modal-insumos-confirm');
 
   try {
-    const res = await api('prepararBOMComSaldo', { op: op.op });
+    const res = await api('prepararBOMComSaldo', { op: op.op, codigoPA: op.codigo, qtde: op.qtde });
     if (!res?.ok) {
       document.getElementById('ins-confirm-lista').innerHTML =
         `<div style="padding:16px;color:var(--danger);font-size:13px">⚠️ ${esc(res?.mensagem||'Erro ao carregar BOM.')}</div>`;
