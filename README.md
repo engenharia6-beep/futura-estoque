@@ -3,303 +3,114 @@
 PWA mobile-first para controle de insumos e produtos acabados.  
 Backend: Google Apps Script | Frontend: GitHub Pages
 
----
-
-## Estrutura
-
-```
-futura-estoque/
-├── index.html      ← App principal (todas as telas)
-├── config.js       ← URL do GAS (único arquivo a editar por ambiente)
-├── manifest.json   ← Configuração do PWA
-├── sw.js           ← Service Worker (cache offline)
-└── assets/
-    ├── icon-192.png
-    └── icon-512.png
-```
+**URL:** `https://engenharia6-beep.github.io/futura-estoque/`  
+**GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`  
+**Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`  
+**Versão GAS ativa: @16**
 
 ---
 
-## Setup
+## Estado atual — 2026-06-30
 
-### 1. Criar repositório no GitHub
-- Nome: `futura-estoque`
-- Visibilidade: Public (necessário para GitHub Pages gratuito)
+### ✅ Funcionando (versão @16)
 
-### 2. Subir os arquivos
-```bash
-git init
-git add .
-git commit -m "feat: estrutura base PWA"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/futura-estoque.git
-git push -u origin main
-```
-
-### 3. Ativar GitHub Pages
-- Repositório → Settings → Pages
-- Source: `Deploy from a branch`
-- Branch: `main` / `/ (root)`
-- Save
-
-O app ficará disponível em:  
-`https://SEU_USUARIO.github.io/futura-estoque/`
-
-### 4. Criar o novo Apps Script (backend)
-- Abra a mesma planilha do sistema atual
-- Extensions → Apps Script → novo projeto
-- Cole o `Code_novo.gs` (será gerado na próxima etapa)
-- Publicar → Deploy as web app
-  - Execute as: Me
-  - Who has access: Anyone
-- Copie a URL gerada
-
-### 5. Configurar a URL do GAS
-Edite o `config.js` e substitua `SEU_ID_AQUI` pelo ID do seu deploy:
-```js
-GAS_URL: 'https://script.google.com/macros/s/SEU_ID/exec',
-```
+- Login, Dashboard, Insumos, PA, OPs, Movimentos
+- Detalhe Insumo/PA — foto com `object-fit:contain`, lightbox ao tocar
+- Pagar OP: BOM, PA Direto, Triangular
+- BOM — lista de PAs pesquisável (aba 📊); modal com estrutura completa, saldo, endereço
+- Triangular — saldo do produto origem exibido em tempo real, bloqueia se saldo insuficiente
+- Insumos com saldo insuficiente aparecem desabilitados/desmarcados na lista de confirmação
+- Idempotência em todas as gravações (chaveIdem) — evita duplicatas em caso de 404 + retry
+- Retry automático com 3 tentativas no `api()`, toast a cada falha
+- Botões Metal/OP nas OPs com impressoras corretas
+- Botões +G/+P direto nos cards, badge de contagem na fila
+- Fila de impressão com barra fixa, Cartão G e Grade A4
+- Impressão ZPL avulsa
+- Endereço exibido no modal de pagamento de OP e na lista BOM
+- Auto-refresh das OPs a cada 5 min
 
 ---
 
-## Instalar no celular
-
-**Android (Chrome):**  
-Abra o link → menu (⋮) → "Adicionar à tela inicial"
-
-**iPhone (Safari):**  
-Abra o link → compartilhar (□↑) → "Adicionar à Tela de Início"
-
----
-
-## Roadmap
-
-- [x] Estrutura base PWA
-- [x] Login
-- [x] Dashboard com resumo
-- [x] Listagem de Insumos com busca
-- [x] Listagem de PA com busca
-- [x] Listagem de OPs
-- [x] Listagem de Movimentos
-- [ ] Detalhe de Insumo (saldo por endereço, histórico)
-- [ ] Detalhe de PA
-- [ ] Modal de baixa PA + baixa automática de insumos (Estrutura de Produtos)
-- [ ] Modal de baixa Triangular + baixa automática de insumos
-- [ ] Modal de baixa via BOM
-- [ ] Embarque / DI
-- [ ] Cartões / impressão
-
-
-## Resumo do Estado Atual — Projeto futura-estoque
-
-### 📁 Repositório GitHub
-`futura-estoque` — GitHub Pages (PWA mobile-first)
-
----
-
-### ✅ O que está pronto
-
-**Infraestrutura**
-- PWA instalável no celular (manifest.json + service worker)
-- Login com sessionStorage — pede login ao fechar o browser
-- Backend `Code_novo.gs` separado do sistema atual (zero impacto no que funciona)
-- Comunicação via `fetch() → doPost` no GAS
-
-**Telas implementadas**
-- Dashboard com resumo (insumos ativos, PAs, estoque crítico, OPs abertas)
-- Lista de Insumos com busca multi-termo + foto thumbnail
-- Lista de PA com busca multi-termo + foto thumbnail
-- Lista de OPs abertas com busca
-- Lista de Movimentos (insumos e PA) com filtro
-
-**Modais**
-- Detalhe de Insumo — foto banner 200px, saldo total, endereços, botões entrada/saída
-- Detalhe de PA — foto banner 200px, saldo, endereços, estrutura de insumos
-- Movimento Insumo (entrada/saída manual)
-- Movimento PA (entrada/saída manual)
-- Pagar OP — escolha entre BOM, PA Direto, Triangular
-- Baixa PA via OP
-- Triangular com preview em tempo real dos 3 movimentos
-- **Confirmação de insumos** — lista editável com checkbox por item, saldo atual, quantidade ajustável, alerta vermelho para saldo insuficiente
-
-**Impressão**
-- Fila de impressão com barra fixa na parte inferior
-- Botões Cartão G e Cartão P nos detalhes de Insumo e PA
-- Envio para PrintNode (layouts G e P para insumos e PA)
-
-**Correção do problema original**
-- Baixa PA direto e Triangular agora abrem o modal de confirmação de insumos
-- Insumos lidos da aba `Estrutura de Produtos` com quantidades proporcionais
-- Usuário controla quais itens baixar via checkbox antes de confirmar
-
----
-
-### 🔄 Pendente / Próximas etapas
-
-- Modal BOM (baixa via insumos — opção que ainda retorna "em breve")
-- Tela Embarque / DI
-- Impressão de etiqueta ZPL via modal de detalhe
-- Ícones PNG para o PWA (`assets/icon-192.png` e `assets/icon-512.png`)
-- Publicar e testar com o GAS novo conectado à planilha real
-
----
-
-### 📌 Arquivos do projeto
+### 📌 Arquivos
 
 | Arquivo | Função |
 |---|---|
-| `index.html` | App completo — todas as telas e modais |
-| `Code_novo.gs` | Backend API REST — 34 rotas, 1613 linhas |
-| `config.js` | URL do GAS (único arquivo a editar por ambiente) |
-| `manifest.json` | Configuração do PWA |
-| `sw.js` | Service Worker (cache offline) |
-| `README.md` | Instruções de setup |
-
-
-
-
-
-
-
-## Resumo do Estado Atual — 11/06/2026
-
-### 📁 Repositório
-**GitHub:** `engenharia6-beep/futura-estoque`
-**URL:** `https://engenharia6-beep.github.io/futura-estoque/`
-**PWA:** Instalável no Chrome ✅
-
----
-
-### ✅ Funcionando
-
-**Infraestrutura**
-- PWA instalável, service worker v2 corrigido
-- Login com sessionStorage
-- Backend `Code_novo.gs` separado (zero impacto no sistema atual)
-- Comunicação `fetch() → doPost` no GAS
-
-**Telas**
-- Dashboard — resumo com insumos, PAs, críticos, OPs
-- Insumos — lista com busca, foto, detalhe, entrada/saída
-- PA — lista com busca, foto, detalhe, estrutura de insumos, entrada/saída
-- OPs — layout fiel ao sistema atual, linhas alternadas, separação por borda verde, botões Metal/OP/Pagar inline, auto-refresh 5min
-- Movimentos — listagem PA e Insumos com filtro
-
-**Modais**
-- Detalhe Insumo — foto banner, saldo, endereços
-- Detalhe PA — foto banner, saldo, estrutura de insumos
-- Pagar OP — escolha BOM / PA Direto / Triangular
-- BOM — lista com checkbox, saldo atual, quantidade ajustável
-- Baixa PA — com modal de confirmação de insumos
-- Triangular — preview em tempo real dos 3 movimentos
-- Confirmação de Insumos — checkbox por item, saldo, quantidade editável, avisos em vermelho
-
-**Impressão**
-- Etiqueta ZPL via botão no detalhe ✅
-- Fila Cartão G e P nos detalhes de Insumo e PA
-- Botões Metal e OP direto nas OPs ✅
-
-**Correção do problema original**
-- Baixa PA e Triangular agora abrem modal de confirmação de insumos
-- Insumos lidos da aba `Estrutura de Produtos`
-
----
-
-### 🔄 Pendente
-
-| Item | Situação |
-|---|---|
-| Fotos 403 | Última tentativa: `lh3.googleusercontent.com/d/ID` — testar |
-| Modal BOM — baixa via insumos | Implementado, testar em produção |
-| Embarque / DI | Não iniciado |
-| Ícone PWA 512px | Usando 192px nos dois slots |
-| Favicon | 404 no repositório |
-
----
-
-### 📌 Arquivos no repositório
-
-| Arquivo | Função |
-|---|---|
-| `index.html` | App completo — todas as telas e modais |
-| `Code_novo.gs` | Backend API REST — 34+ rotas |
-| `config.js` | URL do GAS |
-| `manifest.json` | PWA — aponta para `icon-192.png` na raiz |
+| `index.html` | App completo — todas as telas |
+| `config.js` | URL do GAS (editar ao mudar deploy) |
+| `manifest.json` | PWA manifest |
 | `sw.js` | Service Worker v2 |
-| `icon-192.png` | Ícone do PWA (na raiz) |
+| `Cartao.html` | Template cartão grande (backup) |
+| `CartaoGrade.html` | Template grade A4 (backup) |
+
+> `Code_novo.gs` e os `.html` de cartão são **colados manualmente** no Apps Script — não vêm do git.
 
 ---
 
 ### ⚠️ Lembretes técnicos
 
-- Após qualquer push, limpar cache no browser: `sessionStorage.clear(); caches.keys().then(k=>k.forEach(c=>caches.delete(c))); location.reload(true);`
-- O CSS do `modal-overlay` é crítico — não usar `sed` em blocos grandes do `index.html`
-- O service worker antigo trava tudo — sempre fazer Unregister antes de testar versão nova
-- Fotos do Drive precisam estar compartilhadas individualmente como públicas
-
-
-
-
-
-
-Que ótima notícia! Vou ajustar o resumo então.
-
-## Resumo Completo — Projeto 1: futura-estoque (16/06/2026) — ✅ Concluído
-
----
-
-### 📁 Repositório GitHub
-**`engenharia6-beep/futura-estoque`** → `https://engenharia6-beep.github.io/futura-estoque/`
-PWA instalável, tema verde-azulado (`#1a5c5a` accent, `#f0f4f5` fundo)
-
-### 📜 Apps Script
-Backend executado como `USER_DEPLOYING`, acesso `ANYONE_ANONYMOUS`
-
----
-
-### ✅ Tudo funcionando
-- Login, Dashboard, Insumos, PA, OPs, Movimentos
-- Detalhe Insumo/PA com foto banner
-- Pagar OP: BOM, PA Direto, Triangular — gravação em bloco otimizada
-- Botões Metal/OP nas OPs com impressoras corretas
-- Botões +G/+P direto nos cards de Insumos e PA, com badge de contagem na fila
-- Fila de impressão de cartões (cartão grande G e grade A4 P)
-- Impressão de etiqueta ZPL avulsa
-- Permissão do Drive autorizada — fotos aparecem corretamente nos cartões
-- Auto-refresh nas OPs, idempotência de gravação
-
----
-
-## 📦 Arquivos no GitHub (`/mnt/user-data/outputs/futura-estoque/`)
-
-| Arquivo | Função |
-|---|---|
-| `index.html` | App completo |
-| `Code_novo.gs` | Backend (cópia de backup) |
-| `config.js` | URL do Web App |
-| `manifest.json` | PWA |
-| `sw.js` | Service Worker v2 |
-| `README.md` | Documentação |
-| `Cartao.html` | Template cartão grande — backup |
-| `CartaoGrade.html` | Template grade A4 — backup |
-| `appsscript.json` | Manifesto com oauthScopes — backup |
-| `assets/` | Ícone do PWA |
-
-## 📜 Apps Script (colados manualmente)
-
-| Arquivo | Status |
-|---|---|
-| `Code_novo.gs` | ✅ |
-| `Cartao.html` | ✅ |
-| `CartaoGrade.html` | ✅ |
-| `appsscript.json` | ✅ (oauthScopes autorizados) |
-
----
-
-### ⚠️ Lembretes técnicos (válidos para próximas sessões)
 - Após push: `sessionStorage.clear(); caches.keys().then(k=>k.forEach(c=>caches.delete(c))); location.reload(true);`
-- CSS `.modal-overlay` é sensível — usar `str_replace` cirúrgico, nunca `sed` em blocos grandes
-- Alterações no `.gs`/`.html` do Apps Script exigem novo deploy
-- `Code_novo.gs` e os `.html` de cartão são colados manualmente no Apps Script — não vêm do git push
+- Alterações no GAS exigem novo deploy — usar clasp (`C:/Users/DELMER~1/AppData/Local/Temp/claude/gas-futura/`)
+- CSS `.modal-overlay` é sensível — usar edições cirúrgicas, nunca substituição em bloco
+- clasp deploy: `clasp deploy --deploymentId <ID> --description "desc"`
+- Rollback GAS: `clasp deploy --deploymentId <ID> --versionNumber <N>`
 
-**Projeto 1 está estável e completo.** Pronto para focar 100% no Projeto 2 (futura-relatorios) na próxima conversa.
+---
+
+## Otimizações de performance — PENDENTE (parado em 2026-06-30)
+
+As melhorias abaixo foram implementadas e revertidas porque quebraram o BOM.  
+Estão prontas para retomar com mais cuidado, **uma por vez com teste intermediário**.
+
+### Backend (Código.js) — o que foi tentado e o problema
+
+| Fix | O que muda | Status |
+|---|---|---|
+| `prepararEListarBOM` sem `sleep(3000)` | Lê OPS + Estrutura direto em vez de escrever célula A2 e esperar | ❌ **Quebrou** — BOM sumia os itens |
+| `pagarOPTriangularPA` — leitura única de Movimento_PA | Era 4 leituras separadas (saldo, idempotência, header, header de novo); virou 1 | Revertido junto |
+| `appendRow` × 3 → `setValues` na Triangular | Substituição de 3 chamadas por 1 | Revertido junto |
+| `gravarMovimento` — `getDataRange()` único | Lia header separado + `obterEnderecosSaldo` relendo o sheet | Revertido junto |
+| `_baixarInsumosDaEstrutura` — header duplicado | Linha 355-358: `getDataRange()` + `getRange(...header...)` separados | Revertido junto |
+
+**Causa raiz do bug do BOM:**  
+O novo `prepararEListarBOM` buscava o produto na aba OPS comparando OP como string.  
+A planilha armazena o número como valor numérico — a comparação falhava silenciosamente.  
+A função retornava `{ ok: true, itens: [] }` (sem erro visível).
+
+**Solução correta (para retomar):**  
+O frontend já tem `op.codigo` e `op.qtde` — basta enviá-los ao backend:
+```js
+// index.html linha ~1493
+const res = await api('prepararBOMComSaldo', { op: op.op, codigoPA: op.codigo, qtde: op.qtde });
+```
+No GAS, `prepararEListarBOM(opNumero, dadosOPC)` usa `dadosOPC.codigoPA`/`dadosOPC.qtde` diretamente  
+e **não precisa ler a aba OPS**. Com isso elimina o `sleep(3000)` e uma leitura de planilha.
+
+### Frontend (index.html) — o que foi tentado
+
+| Fix | O que muda | Status |
+|---|---|---|
+| Debounce 300ms nos filtros de busca | `_deb('ins', ()=>filtrarInsumos(this.value))` nos 4 campos search | Revertido junto (era seguro) |
+
+O debounce é seguro e independente — pode ser reaproveitado.
+
+---
+
+### Como retomar as otimizações com segurança
+
+1. **Primeiro:** só o fix do frontend (debounce) — risco zero  
+2. **Segundo:** só o fix do BOM com `codigoPA` passado pelo frontend — testar BOM isoladamente  
+3. **Terceiro:** consolidar leituras em `pagarOPTriangularPA` — testar Triangular  
+4. **Quarto:** `appendRow` → `setValues` — testar pagamentos  
+5. **Quinto:** `gravarMovimento` e `_baixarInsumosDaEstrutura` — testar movimentos manuais  
+
+Cada item gera um commit/deploy separado e é testado antes de avançar.
+
+---
+
+## Histórico de deploys GAS relevantes
+
+| Versão | Descrição |
+|---|---|
+| @16 | ✅ **ATIVA** — idempotência, triangular com saldo, retry 404, BOM com sleep(3000) |
+| @17 | ❌ Performance fixes (revertido) — BOM quebrou |
+| @18 | ❌ Fix parcial BOM (revertido junto) |
