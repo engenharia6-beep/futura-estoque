@@ -1242,6 +1242,7 @@ async function confirmarMovimentoPA() {
         codigoPA: _itemAtual.codigo, qtde, op: '',
         usuario: USUARIO.nome || USUARIO.usuario,
         origem: 'pa_manual',
+        chaveIdem: _gerarChave(),
       };
       await abrirModalInsumosConfirm(`Baixa PA: ${_itemAtual.codigo}`, qtde, _itemAtual.codigo, '');
     } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
@@ -1482,7 +1483,7 @@ async function abrirModalBOM() {
   setBtn('btn-gravar-insumos', false, '✔ Confirmar Baixa BOM');
 
   // Contexto especial para BOM
-  _contextoInsumos = { tipo: 'bom', op: op.op, usuario: USUARIO.nome || USUARIO.usuario };
+  _contextoInsumos = { tipo: 'bom', op: op.op, usuario: USUARIO.nome || USUARIO.usuario, chaveIdem: _gerarChave() };
 
   abrirModal('modal-insumos-confirm');
 
@@ -1681,11 +1682,13 @@ async function confirmarTriangular() {
     return;
   }
   if (!confirm(`Confirmar Triangular da OP ${_opAtual.op}?\n\n1) ${codOrigem} → SAÍDA ${qtde}\n2) ${codDestino} → ENTRADA ${qtde}\n3) ${codDestino} → SAÍDA ${qtde}`)) return;
+  const chaveIdemTri = _gerarChave();
   setBtn('btn-confirmar-tri', true, '<span class="spinner"></span>');
   try {
     const res = await api('pagarTriangular', {
       codOrigem, codDestino, qtde, op: _opAtual.op,
       usuario: USUARIO.nome || USUARIO.usuario,
+      chaveIdem: chaveIdemTri,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
     fecharModal('modal-triangular');
@@ -1694,6 +1697,7 @@ async function confirmarTriangular() {
       codigoPA: codDestino, qtde, op: _opAtual.op,
       usuario: USUARIO.nome || USUARIO.usuario,
       origem: 'triangular',
+      chaveIdem: _gerarChave(),
     };
     await abrirModalInsumosConfirm(`Triangular OP ${_opAtual.op} — Insumos de ${codDestino}`, qtde, codDestino, _opAtual.op);
     carregarOPS(); carregarPA();
@@ -1871,7 +1875,9 @@ async function confirmarGravarInsumos() {
 
   _requisicaoEmAndamento = true;
   setBtn('btn-gravar-insumos', true, '<span class="spinner"></span> Gravando...');
-  const chaveIdem = _gerarChave();
+  // Usa a chave gerada ao abrir o modal — repetir o clique não gera nova chave,
+  // então o backend pode deduplicar caso o 404 seja falso positivo
+  const chaveIdem = _contextoInsumos.chaveIdem || _gerarChave();
   try {
     let res;
     if (_contextoInsumos?.tipo === 'bom') {
