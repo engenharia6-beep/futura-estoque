@@ -6,11 +6,11 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`  
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`  
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`  
-**Versão GAS ativa: @16**
+**Versão GAS ativa: @19**
 
 ---
 
-## Estado atual — 2026-06-30
+## Estado atual — 2026-07-03
 
 ### ✅ Funcionando (versão @16)
 
