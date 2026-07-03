@@ -482,6 +482,7 @@
       </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
+      <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('insumo')">⚖️ Ajuste de Inventário</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
     </div>
   </div>
@@ -549,6 +550,7 @@
       </div>
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
+      <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('pa')">⚖️ Ajuste de Inventário</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
     </div>
   </div>
@@ -582,6 +584,75 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modal-mov-pa')">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-mov-pa" onclick="confirmarMovimentoPA()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: AJUSTE DE INVENTÁRIO (insumo e PA)
+══════════════════════════════════════════════════════ -->
+<div id="modal-ajuste-inv" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title" id="ajuste-titulo">Ajuste de Inventário</span>
+      <button onclick="fecharModal('modal-ajuste-inv')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Campo código (editável para busca manual) -->
+      <div class="field">
+        <label>Código</label>
+        <input id="ajuste-codigo" type="text" autocapitalize="characters" placeholder="Ex: VTV-001"
+          oninput="_ajusteCarregar(this.value)" style="font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.04em">
+      </div>
+
+      <!-- Informações do produto (oculto até carregar) -->
+      <div id="ajuste-info" style="display:none">
+        <div style="display:flex;gap:12px;align-items:center;background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-bottom:12px">
+          <div id="ajuste-foto-wrap" style="width:64px;height:64px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#1e2a2a;display:flex;align-items:center;justify-content:center;font-size:28px"></div>
+          <div style="flex:1;min-width:0">
+            <div id="ajuste-desc" style="font-weight:700;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+            <div id="ajuste-end-atual" style="font-size:12px;color:var(--accent);font-family:var(--mono);margin-top:2px"></div>
+            <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+              <span style="font-size:11px;color:var(--text-muted)">Saldo atual:</span>
+              <span id="ajuste-saldo-atual" style="font-size:16px;font-weight:900;color:var(--text);font-family:var(--mono)">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Nova quantidade -->
+        <div class="field">
+          <label>Nova quantidade em estoque</label>
+          <input id="ajuste-nova-qtde" type="number" min="0" step="0.01" placeholder="0"
+            oninput="_ajustePreview()" style="font-size:22px;font-weight:900;font-family:var(--mono);text-align:center">
+        </div>
+
+        <!-- Endereço (mostrado só para ENTRADA ou quando saldo=0) -->
+        <div class="field" id="ajuste-end-field" style="display:none">
+          <label>Endereço <span style="font-size:11px;color:var(--text-muted)">(para entrada)</span></label>
+          <input id="ajuste-endereco" type="text" placeholder="Ex: A1-01" style="font-family:var(--mono)">
+        </div>
+
+        <!-- Preview do movimento calculado -->
+        <div id="ajuste-preview" style="border-radius:var(--radius-sm);padding:14px;text-align:center;margin-bottom:4px;display:none">
+          <div id="ajuste-preview-tipo" style="font-size:11px;font-weight:700;letter-spacing:.08em;margin-bottom:4px"></div>
+          <div id="ajuste-preview-delta" style="font-size:24px;font-weight:900;font-family:var(--mono)"></div>
+          <div id="ajuste-preview-desc" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
+        </div>
+
+        <!-- Observação -->
+        <div class="field">
+          <label>Observação <span style="font-size:11px;color:var(--text-muted)">(opcional)</span></label>
+          <input id="ajuste-obs" type="text" placeholder="Ex: Contagem física 03/07">
+        </div>
+      </div>
+
+      <div id="ajuste-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-ajuste-inv')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-ajuste" disabled onclick="confirmarAjuste()">Confirmar Ajuste</button>
     </div>
   </div>
 </div>
@@ -1265,6 +1336,177 @@ async function confirmarMovimentoPA() {
     } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
     finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
   }
+}
+
+// ══════════════════════════════════════════════════════
+//  AJUSTE DE INVENTÁRIO
+// ══════════════════════════════════════════════════════
+let _ajusteCtx = null; // { tipoItem:'insumo'|'pa', codigo, saldoAtual, enderecoAtual, descricao }
+
+function abrirAjusteInventario(tipoItem) {
+  if (!_itemAtual) return;
+  const it = _itemAtual;
+  _ajusteCtx = {
+    tipoItem,
+    codigo:       it.codigo,
+    descricao:    it.descricao || '',
+    saldoAtual:   it.estoqueAtual ?? 0,
+    enderecoAtual: it.endereco  || '',
+    fotoUrl:      it.fotoUrl    || '',
+  };
+
+  document.getElementById('ajuste-titulo').textContent =
+    `Ajuste — ${tipoItem === 'pa' ? 'PA' : 'Insumo'}`;
+  document.getElementById('ajuste-codigo').value    = it.codigo;
+  document.getElementById('ajuste-nova-qtde').value = '';
+  document.getElementById('ajuste-obs').value        = '';
+  document.getElementById('ajuste-msg').className    = 'msg';
+  document.getElementById('btn-confirmar-ajuste').disabled = true;
+
+  _ajusteExibirInfo();
+  fecharModal(tipoItem === 'pa' ? 'modal-pa' : 'modal-insumo');
+  abrirModal('modal-ajuste-inv');
+}
+
+function _ajusteCarregar(val) {
+  const cod = (val || '').trim().toUpperCase();
+  if (!cod) { document.getElementById('ajuste-info').style.display = 'none'; _ajusteCtx = null; return; }
+
+  // Inferir tipo pelo cache disponível
+  let it   = insumoCache.find(x => x.codigo.toUpperCase() === cod);
+  let tipo = 'insumo';
+  if (!it) { it = paCache.find(x => x.codigo.toUpperCase() === cod); tipo = 'pa'; }
+  if (!it) {
+    document.getElementById('ajuste-info').style.display = 'none';
+    document.getElementById('ajuste-msg').className = 'msg err';
+    document.getElementById('ajuste-msg').textContent = `Código "${cod}" não encontrado.`;
+    _ajusteCtx = null;
+    return;
+  }
+  document.getElementById('ajuste-msg').className = 'msg';
+  _ajusteCtx = {
+    tipoItem:      tipo,
+    codigo:        it.codigo,
+    descricao:     it.descricao || '',
+    saldoAtual:    it.estoqueAtual ?? 0,
+    enderecoAtual: it.endereco   || '',
+    fotoUrl:       it.fotoUrl    || '',
+  };
+  _ajusteExibirInfo();
+}
+
+function _ajusteExibirInfo() {
+  if (!_ajusteCtx) return;
+  const { codigo, descricao, saldoAtual, enderecoAtual, fotoUrl } = _ajusteCtx;
+
+  // Foto
+  const wrap = document.getElementById('ajuste-foto-wrap');
+  if (fotoUrl) {
+    wrap.innerHTML = `<img src="${esc(_normalizarFotoUrl(fotoUrl))}" style="width:100%;height:100%;object-fit:contain"
+      onerror="this.parentElement.textContent='📦'">`;
+  } else {
+    wrap.textContent = _ajusteCtx.tipoItem === 'pa' ? '🏭' : '📦';
+  }
+
+  document.getElementById('ajuste-desc').textContent        = descricao;
+  document.getElementById('ajuste-saldo-atual').textContent = saldoAtual;
+  document.getElementById('ajuste-end-atual').textContent   = enderecoAtual ? `📍 ${enderecoAtual}` : '';
+  document.getElementById('ajuste-endereco').value          = enderecoAtual;
+
+  document.getElementById('ajuste-nova-qtde').value = '';
+  document.getElementById('ajuste-preview').style.display = 'none';
+  document.getElementById('ajuste-end-field').style.display = 'none';
+  document.getElementById('btn-confirmar-ajuste').disabled  = true;
+  document.getElementById('ajuste-info').style.display = 'block';
+}
+
+function _ajustePreview() {
+  if (!_ajusteCtx) return;
+  const novaQtde = parseFloat(document.getElementById('ajuste-nova-qtde').value);
+  const preview  = document.getElementById('ajuste-preview');
+  const btnConf  = document.getElementById('btn-confirmar-ajuste');
+  const endField = document.getElementById('ajuste-end-field');
+
+  if (isNaN(novaQtde) || novaQtde < 0) {
+    preview.style.display = 'none';
+    btnConf.disabled = true;
+    return;
+  }
+
+  const delta = novaQtde - _ajusteCtx.saldoAtual;
+
+  if (Math.abs(delta) < 0.001) {
+    preview.style.display = 'block';
+    preview.style.background = 'var(--bg)';
+    document.getElementById('ajuste-preview-tipo').textContent  = '— SEM ALTERAÇÃO';
+    document.getElementById('ajuste-preview-tipo').style.color  = 'var(--text-muted)';
+    document.getElementById('ajuste-preview-delta').textContent = '0';
+    document.getElementById('ajuste-preview-delta').style.color = 'var(--text-muted)';
+    document.getElementById('ajuste-preview-desc').textContent  = 'Nenhum movimento será gerado.';
+    endField.style.display  = 'none';
+    btnConf.disabled = true;
+    return;
+  }
+
+  preview.style.display = 'block';
+  const isEntrada = delta > 0;
+  preview.style.background = isEntrada ? 'rgba(16,185,129,.12)' : 'rgba(239,68,68,.10)';
+  document.getElementById('ajuste-preview-tipo').textContent  = isEntrada ? '▲ ENTRADA' : '▼ SAÍDA';
+  document.getElementById('ajuste-preview-tipo').style.color  = isEntrada ? '#10b981' : '#ef4444';
+  document.getElementById('ajuste-preview-delta').textContent = (isEntrada ? '+' : '−') + Math.abs(delta).toFixed(delta % 1 === 0 ? 0 : 2);
+  document.getElementById('ajuste-preview-delta').style.color = isEntrada ? '#10b981' : '#ef4444';
+  document.getElementById('ajuste-preview-desc').textContent  =
+    isEntrada
+      ? `Saldo passará de ${_ajusteCtx.saldoAtual} → ${novaQtde}`
+      : `Saldo passará de ${_ajusteCtx.saldoAtual} → ${novaQtde}`;
+
+  endField.style.display   = isEntrada ? 'block' : 'none';
+  btnConf.disabled = false;
+}
+
+async function confirmarAjuste() {
+  if (!_ajusteCtx) return;
+  const novaQtde  = parseFloat(document.getElementById('ajuste-nova-qtde').value);
+  const endereco  = document.getElementById('ajuste-endereco').value.trim();
+  const obs       = document.getElementById('ajuste-obs').value.trim();
+  const msg       = document.getElementById('ajuste-msg');
+
+  if (isNaN(novaQtde) || novaQtde < 0) { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  const delta = novaQtde - _ajusteCtx.saldoAtual;
+  if (Math.abs(delta) < 0.001) { mostrarMsg(msg, 'Sem alteração de quantidade.', 'warn'); return; }
+
+  const tipo    = delta > 0 ? 'ENTRADA' : 'SAIDA';
+  const qtde    = Math.abs(delta);
+  const obsFinal = obs || `Ajuste de inventário — ${tipo === 'ENTRADA' ? '+' : '-'}${qtde}`;
+  const chaveIdem = _gerarChave();
+  const base = {
+    codigo:      _ajusteCtx.codigo,
+    descricao:   _ajusteCtx.descricao,
+    tipo, qtde,
+    endereco:    tipo === 'ENTRADA' ? (endereco || _ajusteCtx.enderecoAtual) : '',
+    obs:         obsFinal,
+    usuario:     USUARIO.nome || USUARIO.usuario,
+    computer:    '', op: '', qrcode: '',
+    chaveIdem,
+  };
+
+  setBtn('btn-confirmar-ajuste', true, '<span class="spinner"></span>');
+  mostrarMsg(msg, '', '');
+  try {
+    const rota = _ajusteCtx.tipoItem === 'pa' ? 'gravarMovimentoPA' : 'gravarMovimento';
+    const res  = await api(rota, base);
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao gravar.', 'err'); return; }
+
+    // Atualiza o cache local para refletir o novo saldo
+    const cache = _ajusteCtx.tipoItem === 'pa' ? paCache : insumoCache;
+    const idx   = cache.findIndex(x => x.codigo === _ajusteCtx.codigo);
+    if (idx >= 0) cache[idx].estoqueAtual = novaQtde;
+
+    toast(`✔ Ajuste registrado: ${tipo} de ${qtde}`);
+    mostrarMsg(msg, `✔ ${tipo} de ${qtde} registrada. Novo saldo: ${novaQtde}`, 'ok');
+    setTimeout(() => fecharModal('modal-ajuste-inv'), 2000);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-ajuste', false, 'Confirmar Ajuste'); }
 }
 
 // ══════════════════════════════════════════════════════
