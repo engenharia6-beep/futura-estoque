@@ -384,7 +384,7 @@
     <!-- ══ INSUMOS ══ -->
     <div id="page-insumos" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-insumos" type="search" placeholder="Código ou descrição..." oninput="filtrarInsumos(this.value)">
+        <input class="search-input" id="search-insumos" type="search" placeholder="Código ou descrição..." oninput="_deb('ins',()=>filtrarInsumos(this.value))">
       </div>
       <div id="lista-insumos" class="item-list">
         <div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">Carregando...</div></div>
@@ -394,7 +394,7 @@
     <!-- ══ PA ══ -->
     <div id="page-pa" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-pa" type="search" placeholder="Código ou descrição..." oninput="filtrarPA(this.value)">
+        <input class="search-input" id="search-pa" type="search" placeholder="Código ou descrição..." oninput="_deb('pa',()=>filtrarPA(this.value))">
       </div>
       <div id="lista-pa" class="item-list">
         <div class="empty-state"><div class="empty-state-icon">🏭</div><div class="empty-state-text">Carregando...</div></div>
@@ -404,7 +404,7 @@
     <!-- ══ OPS ══ -->
     <div id="page-ops" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-ops" type="search" placeholder="OP, pedido ou produto..." oninput="filtrarOPS(this.value)">
+        <input class="search-input" id="search-ops" type="search" placeholder="OP, pedido ou produto..." oninput="_deb('ops',()=>filtrarOPS(this.value))">
       </div>
       <div class="refresh-bar">
         <span id="ops-count" style="font-weight:600"></span>
@@ -433,7 +433,7 @@
     <!-- ══ BOM ══ -->
     <div id="page-bom" class="page">
       <div class="search-wrap">
-        <input class="search-input" id="search-bom" type="search" placeholder="Código ou descrição do PA..." oninput="filtrarBOM(this.value)">
+        <input class="search-input" id="search-bom" type="search" placeholder="Código ou descrição do PA..." oninput="_deb('bom',()=>filtrarBOM(this.value))">
       </div>
       <div id="lista-bom" class="item-list">
         <div class="empty-state"><div class="empty-state-icon">📊</div><div class="empty-state-text">Carregando...</div></div>
@@ -791,6 +791,8 @@ let USUARIO     = null;
 let insumoCache = [];
 let paCache     = [];
 let opsCache    = [];
+const _debTimers = {};
+function _deb(key, fn, ms = 300) { clearTimeout(_debTimers[key]); _debTimers[key] = setTimeout(fn, ms); }
 let _itemAtual  = null; // insumo ou PA aberto no detalhe
 let _opAtual    = null; // OP selecionada para pagamento
 let _movTipo    = '';   // 'ENTRADA' | 'SAIDA'
@@ -1488,7 +1490,7 @@ async function abrirModalBOM() {
   abrirModal('modal-insumos-confirm');
 
   try {
-    const res = await api('prepararBOMComSaldo', { op: op.op });
+    const res = await api('prepararBOMComSaldo', { op: op.op, codigoPA: op.codigo, qtde: op.qtde });
     if (!res?.ok) {
       document.getElementById('ins-confirm-lista').innerHTML =
         `<div style="padding:16px;color:var(--danger);font-size:13px">⚠️ ${esc(res?.mensagem||'Erro ao carregar BOM.')}</div>`;
