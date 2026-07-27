@@ -372,6 +372,12 @@
 
     <!-- ══ DASHBOARD ══ -->
     <div id="page-dashboard" class="page">
+      <div style="padding:12px 16px 0;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)" id="dash-usuario-nome"></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Versão: <span id="dash-versao" style="font-family:var(--mono)"></span></div>
+        </div>
+      </div>
       <div class="section-header"><span class="section-title">Resumo</span>
         <button class="btn btn-secondary btn-sm" onclick="recarregarDashboard()">↻ Atualizar</button>
       </div>
@@ -998,6 +1004,8 @@ function entrarNoApp() {
   document.getElementById('bottom-nav').classList.add('visible');
   document.getElementById('header-user').textContent = USUARIO.nome || USUARIO.usuario;
   document.getElementById('header-version').textContent = APP_VERSION;
+  document.getElementById('dash-usuario-nome').textContent = USUARIO.nome || USUARIO.usuario;
+  document.getElementById('dash-versao').textContent = APP_VERSION;
   navegar('dashboard');
 }
 
