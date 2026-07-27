@@ -878,6 +878,12 @@ function _gerarChave() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 }
 
+// OP automática para movimentos manuais sem OP real — formato ADJ-YYYYMMDD-HHmm
+function _gerarOPAjuste() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return `ADJ-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+}
+
 let _requisicaoEmAndamento = false; // trava global para operações críticas
 
 async function _apiFetch(acao, dados, signal) {
@@ -1170,7 +1176,7 @@ async function confirmarMovimentoInsumo() {
     const res = await api('gravarMovimento', {
       codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
       tipo: _movTipo, qtde, obs: obs || `${_movTipo} Manual`,
-      usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '', chave: _gerarChave(),
+      usuario: USUARIO.nome || USUARIO.usuario, op: _gerarOPAjuste(), qrcode: '', chave: _gerarChave(),
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
     mostrarMsg(msg, '✔ Movimento registrado!', 'ok');
@@ -1306,7 +1312,7 @@ async function confirmarMovimentoPA() {
       const res = await api('gravarMovimentoPA', {
         codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
         tipo: 'SAIDA', qtde, obs: obs || 'Baixa PA Manual',
-        usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '', chaveIdem: _gerarChave(),
+        usuario: USUARIO.nome || USUARIO.usuario, op: _gerarOPAjuste(), qrcode: '', chaveIdem: _gerarChave(),
       });
       if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
       fecharModal('modal-mov-pa');
@@ -1327,7 +1333,7 @@ async function confirmarMovimentoPA() {
       const res = await api('gravarMovimentoPA', {
         codigo: _itemAtual.codigo, descricao: _itemAtual.descricao,
         tipo: 'ENTRADA', qtde, obs: obs || 'Entrada PA Manual',
-        usuario: USUARIO.nome || USUARIO.usuario, op: '', qrcode: '', chaveIdem: _gerarChave(),
+        usuario: USUARIO.nome || USUARIO.usuario, op: _gerarOPAjuste(), qrcode: '', chaveIdem: _gerarChave(),
       });
       if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
       mostrarMsg(msg, '✔ Entrada PA registrada!', 'ok');
@@ -1486,7 +1492,7 @@ async function confirmarAjuste() {
     endereco:    tipo === 'ENTRADA' ? (endereco || _ajusteCtx.enderecoAtual) : '',
     obs:         obsFinal,
     usuario:     USUARIO.nome || USUARIO.usuario,
-    computer:    '', op: '', qrcode: '',
+    computer:    '', op: _gerarOPAjuste(), qrcode: '',
     chaveIdem,
   };
 
