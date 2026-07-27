@@ -47,6 +47,7 @@
     #header.visible{display:flex}
     #header-title{flex:1;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;text-transform:uppercase;letter-spacing:.08em}
     #header-user{font-size:12px;color:rgba(255,255,255,.75);white-space:nowrap}
+    #header-version{font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;letter-spacing:.04em}
     #btn-logout{background:transparent;color:rgba(255,255,255,.75);font-size:20px;padding:4px;line-height:1;transition:color var(--transition)}
     #btn-logout:hover{color:#fff}
     #content{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;min-height:0}
@@ -363,6 +364,7 @@
   <header id="header">
     <span id="header-title">Controle de Estoque</span>
     <span id="header-user"></span>
+    <span id="header-version"></span>
     <button id="btn-logout" title="Sair" onclick="logout()">⏻</button>
   </header>
 
@@ -873,6 +875,8 @@ let _filaImpressao   = [];   // [{ codigo, tipo:'insumo'|'pa' }]
 // ══════════════════════════════════════════════════════
 //  API
 // ══════════════════════════════════════════════════════
+const APP_VERSION = 'c590600 · 27/07/2026';
+
 // Chave única por envio — protege contra dupla gravação em caso de timeout
 function _gerarChave() {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
@@ -993,6 +997,7 @@ function entrarNoApp() {
   document.getElementById('header').classList.add('visible');
   document.getElementById('bottom-nav').classList.add('visible');
   document.getElementById('header-user').textContent = USUARIO.nome || USUARIO.usuario;
+  document.getElementById('header-version').textContent = APP_VERSION;
   navegar('dashboard');
 }
 
