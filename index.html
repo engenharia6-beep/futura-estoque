@@ -1954,6 +1954,7 @@ async function confirmarTriangular() {
       chaveIdem: chaveIdemTri,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    if (res.jaGravado) { mostrarMsg(msg, '⚠️ Esta OP já foi baixada anteriormente.', 'warn'); return; }
     fecharModal('modal-triangular');
     toast('✔ Triangular gravado! Carregando insumos...');
     _contextoInsumos = {
