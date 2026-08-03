@@ -1,0 +1,1852 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  Code_novo.gs — Backend API REST para o PWA (GitHub Pages)
+//  v1.0 — doPost roteador + todas as funções do sistema atual
+//          + _baixarInsumosDaEstrutura (nova — baixa insumos via Estrutura_Produtos)
+//
+//  COMO USAR:
+//  1. Crie um novo projeto Apps Script na mesma planilha
+//  2. Cole este arquivo completo
+//  3. Publicar → Deploy as web app
+//     - Execute as: Me
+//     - Who has access: Anyone
+//  4. Copie a URL e cole no config.js do GitHub Pages
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Constantes ───────────────────────────────────────────────────────────────
+const SPREADSHEET_ID        = '1YMxrDY8aJk7NvMGd46mOjhJqnhw2bN7-xk-qh1QLCu8';
+const NOME_ABA_CADASTRO     = 'Cadastro';
+const NOME_ABA_MOVIMENTO    = 'Movimento';
+const NOME_ABA_USUARIOS     = 'USUARIOS';
+const NOME_ABA_CONFIG       = 'CONFIG';
+const NOME_ABA_OPS          = 'OPS';
+const NOME_ABA_BOM          = 'BOM';
+const NOME_ABA_CADASTRO_PA  = 'Cadastro_PA';
+const NOME_ABA_MOVIMENTO_PA = 'Movimento_PA';
+const NOME_ABA_EMBARQUE     = 'Embarque';
+const NOME_ABA_ESTRUTURA    = 'Estrutura de Produtos'; // ← nova aba
+
+const PRINTNODE_API_KEY        = 'ZYS0tKo625xsi8K72T2OcfuzQ4ChLpR6ulS7qEPry0U';
+const PRINTNODE_PRINTER_ID     = 75307272;
+const PRINTNODE_PRINTER_M      = 75307276;
+const PRINTNODE_PRINTER_CARTAO = 75494109;
+const ID_LOGO_FUTURA           = '15XkD0B12QluNVLcbeB_d7SGbQpzvtVYs';
+
+const _NUM_CAMPOS = ['estoqueInicial','estoqueMin','estoqueSeg','pontoPedido','precoUSD','precoBRL','peso'];
+
+const _CAMPOS_CAD = {
+  descricao:      ['DESCRIÇÃO'],
+  tipo:           ['TIPO'],
+  nomeCurto:      ['NOMECURTO'],
+  unidade:        ['UNIDADE', 'UIDADE_MEDIDA'],
+  endereco:       ['Endereço'],
+  fotoUrl:        ['Endereço_Foto'],
+  situacao:       ['Situação'],
+  obs:            ['obs'],
+  estoqueInicial: ['ESTOQUE_INICIAL'],
+  estoqueMin:     ['Estoque_Minimo'],
+  estoqueSeg:     ['Estoque_ Segurança'],
+  pontoPedido:    ['Ponto_Pedido'],
+  precoUSD:       ['U$ Unit.'],
+  precoBRL:       ['R$ Unit.'],
+  ncm:            ['SUFRAMA_NCM'],
+  projeto:        ['SUFRAMA_PROJETO'],
+  codFornecedor:  ['Código_Fornecedor'],
+  nve:            ['NVE'],
+  peso:           ['Peso_Unitário'],
+  descTecnica:    ['DESCRIÇÃO TECNICA'],
+  manufacturer:   ['MANUFACTURER NAME'],
+  address:        ['MANUFACTURER ADDRESS'],
+  country:        ['COUNTRY OF ORIGIN'],
+  packageType:    ['PACKAGE TYPE'],
+  zplCadastro:    ['ZPL'],
+};
+
+// ── Helpers básicos ───────────────────────────────────────────────────────────
+function _ss()  { return SpreadsheetApp.openById(SPREADSHEET_ID); }
+function _sh(n) { return _ss().getSheetByName(n); }
+
+function _norm(s) {
+  return String(s || '').trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function _idxCol(header, nome) {
+  const alvo = _norm(nome);
+  return header.findIndex(v => _norm(v) === alvo);
+}
+
+function _montarLinhaMovimento(header, campos) {
+  const linha = new Array(header.length).fill('');
+  const mapa  = {
+    'id':          campos.id,
+    'qrcode':      campos.qrcode      || '',
+    'data':        campos.data,
+    'tipo':        campos.tipo        || '',
+    'n da op':     campos.op          || '',
+    'op':          campos.op          || '',
+    'codigo':      campos.codigo      || '',
+    'descricao':   campos.descricao   || '',
+    'qtde':        campos.qtde        ?? 0,
+    'obs':         campos.obs         || '',
+    'foto':        '',
+    'endereco':    campos.endereco    || '',
+    'user':        campos.usuario     || '',
+    'usuario':     campos.usuario     || '',
+    'computer':    campos.computer    || '',
+    'dispositivo': campos.computer    || '',
+    'localizacao': campos.localizacao || '',
+    'chave':       campos.chave       || '',
+    'ip':          campos.ip          || '',
+  };
+  const contagem = {};
+  header.forEach((colName, i) => {
+    const key = _norm(colName);
+    if (mapa[key] === undefined) return;
+    contagem[key] = (contagem[key] || 0) + 1;
+    if (key === 'data') {
+      const d = campos.data instanceof Date ? campos.data : new Date();
+      linha[i] = contagem[key] === 1 ? d : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    } else {
+      linha[i] = mapa[key] !== undefined && mapa[key] !== null ? mapa[key] : '';
+    }
+  });
+  return linha;
+}
+
+// ── Helpers compartilhados ───────────────────────────────────────────────────
+function _saldosEmMemoria(data, header) {
+  const idxN = {};
+  header.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
+  const iT = idxN['tipo']     ?? -1;
+  const iC = idxN['codigo']   ?? -1;
+  const iQ = idxN['qtde']     ?? -1;
+  const iE = idxN['endereco'] ?? -1;
+  const mapa = {};
+  for (let i = 1; i < data.length; i++) {
+    const r   = data[i];
+    const cod = String(r[iC] || '').trim();
+    if (!cod) continue;
+    const t   = String(r[iT] || '').toUpperCase();
+    const q   = Number(r[iQ] || 0);
+    const end = (iE >= 0 ? String(r[iE] || '').trim() : '') || '(sem endereço)';
+    const inc = t === 'ENTRADA' ? q : -q;
+    if (!mapa[cod]) mapa[cod] = {};
+    mapa[cod][end] = (mapa[cod][end] || 0) + inc;
+  }
+  const resultado = {};
+  for (const [cod, ends] of Object.entries(mapa)) {
+    resultado[cod] = Object.entries(ends)
+      .map(([endereco, s]) => ({ endereco, saldo: s }))
+      .filter(x => x.saldo > 0)
+      .sort((a, b) => b.saldo - a.saldo);
+  }
+  return resultado;
+}
+
+function _distribuirPorEndereco(enderecos, qtdeNecessaria) {
+  const totalDisp = enderecos.reduce((s, e) => s + e.saldo, 0);
+  if (qtdeNecessaria > totalDisp) return null;
+  const dist = [];
+  let restante = qtdeNecessaria;
+  for (const { endereco, saldo } of enderecos) {
+    if (restante <= 0) break;
+    const baixar = Math.min(saldo, restante);
+    dist.push({ endereco, qtde: baixar });
+    restante -= baixar;
+  }
+  return dist;
+}
+
+function _verificarGravacao(sh, ids, linhasAntes) {
+  try {
+    SpreadsheetApp.flush();
+    if (linhasAntes == null) return { ok: true, faltando: [] };
+    const linhasDepois = sh.getLastRow();
+    const esperado     = linhasAntes + ids.length;
+    if (linhasDepois < esperado)
+      return { ok: false, faltando: ids, erro: `Esperado ${esperado} linhas, encontrado ${linhasDepois}.` };
+    return { ok: true, faltando: [] };
+  } catch(e) { return { ok: false, faltando: ids, erro: e.message }; }
+}
+
+function _mapaStatusCadastro() {
+  const sh   = _sh(NOME_ABA_CADASTRO);
+  if (!sh) return {};
+  const data = sh.getDataRange().getValues();
+  const h    = data[0];
+  const iCOD = _idxCol(h, 'CÓDIGO');
+  const iSIT = _idxCol(h, 'Situação');
+  const mapa = {};
+  for (let i = 1; i < data.length; i++) {
+    const cod = String(data[i][iCOD] || '').trim();
+    if (cod) mapa[cod] = String(data[i][iSIT] || '').trim().toUpperCase();
+  }
+  return mapa;
+}
+
+function _mapaStatusCadastroPA() {
+  const sh   = _sh(NOME_ABA_CADASTRO_PA);
+  if (!sh) return {};
+  const data = sh.getDataRange().getValues();
+  const h    = data[0];
+  const iCOD = _idxCol(h, 'CÓDIGO');
+  const iSIT = _idxCol(h, 'Situação');
+  const mapa = {};
+  for (let i = 1; i < data.length; i++) {
+    const cod = String(data[i][iCOD] || '').trim();
+    if (cod) mapa[cod] = String(data[i][iSIT] || '').trim().toUpperCase();
+  }
+  return mapa;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  doGet — rota simples para teste de saúde da API
+// ════════════════════════════════════════════════════════════════════════════
+function doGet() {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, mensagem: 'API Futura Estoque online.' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  doPost — roteador central
+//  Recebe: { acao: string, dados: object }
+//  Retorna: JSON com resultado da função correspondente
+// ════════════════════════════════════════════════════════════════════════════
+function doPost(e) {
+  try {
+    const { acao, dados } = JSON.parse(e.postData.contents);
+
+    const rotas = {
+      // ── Auth ──────────────────────────────────────────────────────────────
+      'autenticar':             () => autenticarUsuario(dados.usuario, dados.senha),
+      'alterarSenha':           () => alterarSenha(dados.nomeUsuario, dados.senhaAtual, dados.senhaNova),
+
+      // ── Cadastro Insumos ──────────────────────────────────────────────────
+      'listarCadastro':         () => listarItensCadastro(dados.filtroSituacao),
+      'salvarCadastro':         () => salvarItemCadastro(dados),
+      'obterFormulasInsumo':    () => obterCamposComFormulaCadastro(dados.codigo),
+
+      // ── Cadastro PA ───────────────────────────────────────────────────────
+      'listarCadastroPA':       () => listarItensCadastroPA(dados.filtroSituacao),
+      'salvarCadastroPA':       () => salvarItemCadastroPA(dados),
+      'obterFormulasPA':        () => obterCamposComFormulaCadastroPA(dados.codigo),
+
+      // ── Movimentos Insumos ────────────────────────────────────────────────
+      'listarMovimentos':       () => listarMovimentos(),
+      'gravarMovimento':        () => gravarMovimento(dados),
+      'gravarMovimentosEmLote': () => gravarMovimentosEmLote(dados.movimentos),
+      'obterSaldo':             () => ({ saldo: obterSaldo(dados.codigo) }),
+      'obterEnderecosSaldo':    () => obterEnderecosSaldo(dados.codigo),
+
+      // ── Movimentos PA ─────────────────────────────────────────────────────
+      'listarMovimentosPA':     () => listarMovimentosPA(),
+      'gravarMovimentoPA':      () => gravarMovimentoPA(dados),
+      'gravarMovimentosEmLotePA': () => gravarMovimentosEmLotePA(dados.movimentos),
+      'obterSaldoPA':           () => ({ saldo: obterSaldoPA(dados.codigo) }),
+      'obterEnderecosSaldoPA':  () => obterEnderecosSaldoPA(dados.codigo),
+
+      // ── OPs ───────────────────────────────────────────────────────────────
+      'listarOPS':              () => listarOPS(),
+      'prepararBOM':            () => prepararEListarBOM(dados.op),
+      'prepararBOMComSaldo':    () => prepararBOMComSaldo(dados.op),
+      'baixarBOMComTipo':       () => baixarBOMComTipo(dados.movimentos, dados.dadosBase),
+
+      // ── Triangular (nova versão com baixa de insumos) ─────────────────────
+      'pagarTriangular':        () => pagarOPTriangularPA(dados),
+
+      // ── Mudança de endereço ───────────────────────────────────────────────
+      'mudarEndereco':          () => mudarEndereco(dados),
+      'mudarEnderecoPA':        () => mudarEnderecoPA(dados),
+
+      // ── Embarque / DI ─────────────────────────────────────────────────────
+      'listarEmbarque':         () => listarEmbarque(),
+      'gravarEntradaDI':        () => gravarEntradaDI(dados),
+
+      // ── Impressão ─────────────────────────────────────────────────────────
+      'imprimirZPL':            () => imprimirZPL(dados.op, dados.zpl, dados.impressora),
+      'imprimirZPLCadastro':    () => imprimirZPLCadastro(dados.codigo),
+      'imprimirZPLCadastroPA':  () => imprimirZPLCadastroPA(dados.codigo),
+      'imprimirFilaCartaoInsumo': () => imprimirFilaCartaoInsumo(dados.lista),
+      'imprimirFilaCartaoPA':   () => imprimirFilaCartaoPA(dados.lista),
+
+      // ── Estrutura de Produtos ─────────────────────────────────────────────
+      'listarEstruturaProduto': () => listarEstruturaProduto(dados.codigoPA),
+      'prepararBaixaInsumos':   () => prepararBaixaInsumos(dados.codigoPA, dados.qtde),
+      'gravarBaixaInsumos':     () => gravarBaixaInsumos(dados.itens, dados.dadosBase),
+
+    };
+
+    const fn = rotas[acao];
+    if (!fn) return _resposta({ ok: false, mensagem: `Ação desconhecida: ${acao}` });
+    return _resposta(fn());
+
+  } catch (e) {
+    return _resposta({ ok: false, mensagem: 'Erro interno: ' + e.message });
+  }
+}
+
+function _resposta(dados) {
+  return ContentService
+    .createTextOutput(JSON.stringify(dados))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  ESTRUTURA DE PRODUTOS — listar insumos de um PA
+// ════════════════════════════════════════════════════════════════════════════
+function listarEstruturaProduto(codigoPA) {
+  try {
+    const sh = _sh(NOME_ABA_ESTRUTURA);
+    if (!sh) return { ok: false, mensagem: 'Aba "Estrutura de Produtos" não encontrada.' };
+    const data   = sh.getDataRange().getValues();
+    if (data.length < 2) return { ok: true, itens: [] };
+    const header = data[0];
+
+    const iCodPA   = _idxCol(header, 'CODIGO_PRODUTO');
+    const iCodIns  = _idxCol(header, 'CODIGO_INSUMO');
+    const iDescIns = _idxCol(header, 'DESCRICAO_INSUMO');
+    const iQtde    = _idxCol(header, 'QTDE_UTILIZADA');
+    const iOrdem   = _idxCol(header, 'ORDEM');
+
+    if (iCodPA < 0 || iCodIns < 0 || iQtde < 0)
+      return { ok: false, mensagem: 'Colunas obrigatórias não encontradas na Estrutura de Produtos.' };
+
+    const cod = String(codigoPA || '').trim().toUpperCase();
+    const itens = data.slice(1)
+      .filter(r => String(r[iCodPA] || '').trim().toUpperCase() === cod &&
+                   String(r[iCodIns] || '').trim() !== '')
+      .map(r => ({
+        codigoInsumo:  String(r[iCodIns]  || '').trim(),
+        descricao:     iDescIns >= 0 ? String(r[iDescIns] || '').trim() : '',
+        qtdeUtilizada: Number(r[iQtde] || 0),
+        ordem:         iOrdem >= 0 ? String(r[iOrdem] || '').trim() : '',
+      }));
+
+    return { ok: true, itens };
+  } catch(e) { return { ok: false, mensagem: 'Erro ao listar estrutura: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  _baixarInsumosDaEstrutura — baixa automática dos insumos ao pagar PA
+//  Chamada internamente por gravarMovimentoPA e pagarOPTriangularPA
+//
+//  Lógica:
+//  - Busca os insumos do PA na aba "Estrutura de Produtos"
+//  - Calcula qtde = QTDE_UTILIZADA × qtdePABaixado
+//  - Chama gravarMovimentosEmLote para cada insumo
+//  - NÃO bloqueia: se um insumo tiver saldo insuficiente, registra aviso e continua
+//
+//  Retorna: { gravados: N, avisos: ['MSG1', 'MSG2'] }
+// ════════════════════════════════════════════════════════════════════════════
+function _baixarInsumosDaEstrutura(codigoPA, qtdePABaixado, dadosBase) {
+  const resultado = { gravados: 0, avisos: [] };
+  try {
+    const estrutura = listarEstruturaProduto(codigoPA);
+    if (!estrutura.ok || !estrutura.itens.length) {
+      resultado.avisos.push(`Nenhum insumo encontrado na Estrutura de Produtos para ${codigoPA}.`);
+      return resultado;
+    }
+
+    const saldosInsumo = _saldosEmMemoria(
+      _sh(NOME_ABA_MOVIMENTO).getDataRange().getValues(),
+      _sh(NOME_ABA_MOVIMENTO).getRange(1, 1, 1, _sh(NOME_ABA_MOVIMENTO).getLastColumn()).getValues()[0]
+    );
+    const saldoTotal = (cod) => (saldosInsumo[cod] || []).reduce((s, e) => s + e.saldo, 0);
+
+    const paraGravar = [];
+    const avisos     = [];
+
+    for (const item of estrutura.itens) {
+      const qtdeNecessaria = item.qtdeUtilizada * qtdePABaixado;
+      if (qtdeNecessaria <= 0) continue;
+
+      const saldo = saldoTotal(item.codigoInsumo);
+      if (saldo < qtdeNecessaria) {
+        // Avisa mas não bloqueia — baixa o que tiver
+        avisos.push(`Saldo insuficiente para ${item.codigoInsumo}: necessário ${qtdeNecessaria}, disponível ${saldo}.`);
+        if (saldo <= 0) continue; // sem saldo nenhum, pula
+      }
+
+      paraGravar.push({
+        codigo:    item.codigoInsumo,
+        descricao: item.descricao,
+        qtde:      Math.min(qtdeNecessaria, saldo), // baixa o que tiver
+        tipo:      'SAIDA',
+        op:        dadosBase.op        || '',
+        usuario:   dadosBase.usuario   || '',
+        computer:  dadosBase.computer  || '',
+        localizacao: dadosBase.localizacao || '',
+        ip:        dadosBase.ip        || '',
+        obs:       `Baixa automática via PA ${codigoPA} — OP: ${dadosBase.op || ''}`,
+        qrcode:    '',
+        chave:     '',
+        endereco:  '',
+      });
+    }
+
+    if (paraGravar.length > 0) {
+      const res = gravarMovimentosEmLote(paraGravar);
+      if (res.ok) {
+        resultado.gravados = res.gravados;
+      } else {
+        avisos.push('Erro ao gravar insumos: ' + res.mensagem);
+      }
+    }
+
+    resultado.avisos = avisos;
+  } catch(e) {
+    resultado.avisos.push('Erro ao baixar insumos da estrutura: ' + e.message);
+  }
+  return resultado;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  AUTENTICAÇÃO
+// ════════════════════════════════════════════════════════════════════════════
+function autenticarUsuario(usuario, senha) {
+  try {
+    const sh   = _sh(NOME_ABA_USUARIOS);
+    if (!sh) return { ok: false, mensagem: 'Aba USUARIOS não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    let hRow   = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i].some(c => String(c).trim() === 'Usuario')) { hRow = i; break; }
+    }
+    if (hRow === -1) return { ok: false, mensagem: 'Cabeçalho não encontrado.' };
+    const h   = data[hRow];
+    const idx = {};
+    h.forEach((v, i) => { idx[String(v).trim()] = i; });
+    const row = data.slice(hRow + 1)
+      .filter(r => String(r[idx['Usuario']] || '').trim() !== '')
+      .find(r =>
+        String(r[idx['Usuario']] || '').toLowerCase().trim() === usuario.toLowerCase().trim() &&
+        String(r[idx['Senha']]   || '').trim() === senha.trim()
+      );
+    if (!row) return { ok: false, mensagem: 'Usuário ou senha inválidos.' };
+    if (String(row[idx['Ativo']] || '').toUpperCase().trim() !== 'SIM')
+      return { ok: false, mensagem: 'Usuário inativo.' };
+    return { ok: true, usuario: {
+      id:      String(row[idx['ID']]      || ''),
+      usuario: String(row[idx['Usuario']] || ''),
+      nome:    String(row[idx['Nome']]    || ''),
+      perfil:  String(row[idx['Perfil']]  || ''),
+      empresa: String(row[idx['Empresa']] || ''),
+      ativo:   String(row[idx['Ativo']]   || ''),
+    }};
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+function alterarSenha(nomeUsuario, senhaAtual, senhaNova) {
+  try {
+    const sh   = _sh(NOME_ABA_USUARIOS);
+    if (!sh) return { ok: false, mensagem: 'Aba USUARIOS não encontrada.' };
+    const data   = sh.getDataRange().getValues();
+    let hRow     = -1;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i].some(c => String(c).trim() === 'Usuario')) { hRow = i; break; }
+    }
+    if (hRow === -1) return { ok: false, mensagem: 'Cabeçalho não encontrado.' };
+    const header = data[hRow];
+    const idx    = {};
+    header.forEach((v, i) => { idx[String(v).trim()] = i; });
+    for (let i = hRow + 1; i < data.length; i++) {
+      const r = data[i];
+      if (String(r[idx['Nome']] || '').trim() !== nomeUsuario) continue;
+      if (String(r[idx['Ativo']] || '').toUpperCase().trim() !== 'SIM')
+        return { ok: false, mensagem: 'Usuário inativo.' };
+      if (String(r[idx['Senha']] || '').trim() !== senhaAtual)
+        return { ok: false, mensagem: 'Senha atual incorreta.' };
+      sh.getRange(i + 1, idx['Senha'] + 1).setValue(senhaNova);
+      return { ok: true };
+    }
+    return { ok: false, mensagem: 'Usuário não encontrado.' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CADASTRO INSUMOS — listar / salvar
+// ════════════════════════════════════════════════════════════════════════════
+function listarItensCadastro(filtroSituacao) {
+  try {
+    const filtro = filtroSituacao ? String(filtroSituacao).trim().toUpperCase() : 'ATIVO';
+    const sh = _sh(NOME_ABA_CADASTRO);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const h = data[0];
+
+    const iId        = _idxCol(h, 'ID');
+    const iFoto      = _idxCol(h, 'Endereço_Foto');
+    const iEndereco  = _idxCol(h, 'Endereço');
+    const iCodigo    = _idxCol(h, 'CÓDIGO');
+    const iDescricao = _idxCol(h, 'DESCRIÇÃO');
+    const iTipo      = _idxCol(h, 'TIPO');
+    const iNomeCurto = _idxCol(h, 'NOMECURTO');
+    const iUnidade   = _idxCol(h, 'UNIDADE') >= 0 ? _idxCol(h, 'UNIDADE') : _idxCol(h, 'UIDADE_MEDIDA');
+    const iEstIni    = _idxCol(h, 'ESTOQUE_INICIAL');
+    const iEstAtual  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iEstMin    = _idxCol(h, 'Estoque_Minimo');
+    const iEstSeg    = _idxCol(h, 'Estoque_ Segurança');
+    const iPontoPed  = _idxCol(h, 'Ponto_Pedido');
+    const iObs       = _idxCol(h, 'obs');
+    const iSituacao  = _idxCol(h, 'Situação');
+    const iPrecoUSD  = _idxCol(h, 'U$ Unit.');
+    const iPrecoBRL  = _idxCol(h, 'R$ Unit.');
+    const iPeso      = _idxCol(h, 'Peso_Unitário');
+    const iChave     = _idxCol(h, 'CHAVE');
+
+    const g = (r, i) => i >= 0 && i < r.length ? String(r[i] ?? '') : '';
+    const n = (r, i) => i >= 0 && i < r.length ? Number(r[i] || 0) : 0;
+
+    return data.slice(1)
+      .filter(r => {
+        if (g(r, iCodigo).trim() === '') return false;
+        const sit = g(r, iSituacao).trim().toUpperCase();
+        if (filtro === 'TODOS')  return true;
+        if (filtro === 'ATIVO')  return sit === 'ATIVO' || sit === '';
+        if (filtro === 'INATIVO') return sit === 'INATIVO';
+        return sit === filtro;
+      })
+      .map(r => ({
+        id:             g(r, iId),
+        fotoUrl:        g(r, iFoto),
+        endereco:       g(r, iEndereco),
+        codigo:         g(r, iCodigo),
+        descricao:      g(r, iDescricao),
+        tipo:           g(r, iTipo),
+        nomeCurto:      g(r, iNomeCurto),
+        unidade:        g(r, iUnidade),
+        estoqueInicial: n(r, iEstIni),
+        estoqueAtual:   n(r, iEstAtual),
+        estoqueMin:     n(r, iEstMin),
+        estoqueSeg:     n(r, iEstSeg),
+        pontoPedido:    n(r, iPontoPed),
+        obs:            g(r, iObs),
+        situacao:       g(r, iSituacao).trim().toUpperCase() || 'ATIVO',
+        chave:          g(r, iChave),
+        precoUSD:       n(r, iPrecoUSD),
+        precoBRL:       n(r, iPrecoBRL),
+        peso:           n(r, iPeso),
+      }));
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+function salvarItemCadastro(dados) {
+  try {
+    const sh     = _sh(NOME_ABA_CADASTRO);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro não encontrada.' };
+    const data   = sh.getDataRange().getValues();
+    const header = data[0];
+    const iCOD   = _idxCol(header, 'CÓDIGO');
+    if (iCOD < 0) return { ok: false, mensagem: 'Coluna CÓDIGO não encontrada.' };
+    const codigo = String(dados.codigo || '').trim().toUpperCase();
+    if (!codigo) return { ok: false, mensagem: 'Código obrigatório.' };
+    let rowNum = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][iCOD] || '').trim().toUpperCase() === codigo) { rowNum = i + 1; break; }
+    }
+    if (rowNum > 0) {
+      const formulas   = sh.getRange(rowNum, 1, 1, header.length).getFormulas()[0];
+      const linhaAtual = [...data[rowNum - 1]];
+      for (const [field, colNames] of Object.entries(_CAMPOS_CAD)) {
+        if (!(field in dados)) continue;
+        for (const col of colNames) {
+          const ci = _idxCol(header, col);
+          if (ci < 0) continue;
+          if (formulas[ci]) continue;
+          linhaAtual[ci] = _NUM_CAMPOS.includes(field) ? Number(dados[field] || 0) : (dados[field] ?? '');
+          break;
+        }
+      }
+      sh.getRange(rowNum, 1, 1, linhaAtual.length).setValues([linhaAtual]);
+      return { ok: true, acao: 'atualizado', mensagem: 'Item atualizado!' };
+    }
+    if (!dados.descricao) return { ok: false, mensagem: 'Descrição obrigatória.' };
+    sh.appendRow(header.map(col => {
+      const c = String(col).trim();
+      switch(c) {
+        case 'CÓDIGO':     return codigo;
+        case 'DESCRIÇÃO':  return dados.descricao || '';
+        case 'Situação':   return dados.situacao  || 'ATIVO';
+        default:           return '';
+      }
+    }));
+    return { ok: true, acao: 'criado', mensagem: 'Item criado!' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+function obterCamposComFormulaCadastro(codigo) {
+  return _obterCamposComFormula(NOME_ABA_CADASTRO, codigo);
+}
+function obterCamposComFormulaCadastroPA(codigo) {
+  return _obterCamposComFormula(NOME_ABA_CADASTRO_PA, codigo);
+}
+function _obterCamposComFormula(nomeAba, codigo) {
+  try {
+    const sh   = _sh(nomeAba);
+    if (!sh) return { ok: true, formulas: [] };
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO');
+    if (iCOD < 0) return { ok: true, formulas: [] };
+    const rowIdx = data.slice(1).findIndex(r => String(r[iCOD]||'').trim().toUpperCase() === String(codigo).trim().toUpperCase());
+    if (rowIdx < 0) return { ok: true, formulas: [] };
+    const fmls = sh.getRange(rowIdx + 2, 1, 1, h.length).getFormulas()[0];
+    const cols = [];
+    fmls.forEach((f, i) => { if (f) cols.push(String(h[i]).trim()); });
+    return { ok: true, formulas: cols };
+  } catch(e) { return { ok: true, formulas: [] }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CADASTRO PA — listar / salvar
+// ════════════════════════════════════════════════════════════════════════════
+function listarItensCadastroPA(filtroSituacao) {
+  try {
+    const filtro = filtroSituacao ? String(filtroSituacao).trim().toUpperCase() : 'ATIVO';
+    const sh     = _sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro_PA não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const h = data[0];
+
+    const iCodigo   = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iFoto     = _idxCol(h, 'FOTO_SHEETS') >= 0 ? _idxCol(h, 'FOTO_SHEETS') : _idxCol(h, 'Endereço_Foto') >= 0 ? _idxCol(h, 'Endereço_Foto') : 3;
+    const iEndereco = _idxCol(h, 'ENDEREÇO_PA') >= 0 ? _idxCol(h, 'ENDEREÇO_PA') : _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : 5;
+    const iDesc     = _idxCol(h, 'DESCRIÇÃO') >= 0 ? _idxCol(h, 'DESCRIÇÃO') : _idxCol(h, 'DESCRICAO');
+    const iFamilia  = _idxCol(h, 'FAMILIA') >= 0 ? _idxCol(h, 'FAMILIA') : _idxCol(h, 'FAMÍLIA');
+    const iEstAtual = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iEstMin   = _idxCol(h, 'Estoque_Minimo');
+    const iSituacao = _idxCol(h, 'Situação');
+    const iId       = _idxCol(h, 'ID');
+    const iChave    = _idxCol(h, 'CHAVE');
+    const iObs      = _idxCol(h, 'obs');
+    const iUSD      = _idxCol(h, 'U$ Unit.');
+    const iBRL      = _idxCol(h, 'R$ Unit.');
+
+    const g = (r, i) => i >= 0 && i < r.length ? String(r[i] ?? '') : '';
+    const n = (r, i) => i >= 0 && i < r.length ? Number(r[i] || 0) : 0;
+
+    return data.slice(1)
+      .filter(r => {
+        if (g(r, iCodigo).trim() === '') return false;
+        const sit = g(r, iSituacao).trim().toUpperCase();
+        if (filtro === 'TODOS')  return true;
+        if (filtro === 'ATIVO')  return sit === 'ATIVO' || sit === '';
+        if (filtro === 'INATIVO') return sit === 'INATIVO';
+        return sit === filtro;
+      })
+      .map(r => ({
+        id:           g(r, iId),
+        codigo:       g(r, iCodigo).trim(),
+        fotoUrl:      g(r, iFoto),
+        endereco:     g(r, iEndereco),
+        descricao:    g(r, iDesc),
+        familia:      g(r, iFamilia),
+        estoqueAtual: n(r, iEstAtual),
+        estoqueMin:   n(r, iEstMin),
+        situacao:     g(r, iSituacao).trim().toUpperCase() || 'ATIVO',
+        chave:        g(r, iChave),
+        obs:          g(r, iObs),
+        precoUSD:     n(r, iUSD),
+        precoBRL:     n(r, iBRL),
+      }));
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+function salvarItemCadastroPA(dados) {
+  try {
+    const sh     = _sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro_PA não encontrada.' };
+    const data   = sh.getDataRange().getValues();
+    const header = data[0];
+    const iCOD   = _idxCol(header, 'CÓDIGO');
+    if (iCOD < 0) return { ok: false, mensagem: 'Coluna CÓDIGO não encontrada.' };
+    const codigo = String(dados.codigo || '').trim().toUpperCase();
+    if (!codigo) return { ok: false, mensagem: 'Código obrigatório.' };
+    let rowNum = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][iCOD]||'').trim().toUpperCase() === codigo) { rowNum = i + 1; break; }
+    }
+    if (rowNum > 0) {
+      const formulas   = sh.getRange(rowNum, 1, 1, header.length).getFormulas()[0];
+      const linhaAtual = [...data[rowNum - 1]];
+      for (const [field, colNames] of Object.entries(_CAMPOS_CAD)) {
+        if (!(field in dados)) continue;
+        for (const col of colNames) {
+          const ci = _idxCol(header, col);
+          if (ci < 0) continue;
+          if (formulas[ci]) continue;
+          linhaAtual[ci] = _NUM_CAMPOS.includes(field) ? Number(dados[field]||0) : (dados[field] ?? '');
+          break;
+        }
+      }
+      sh.getRange(rowNum, 1, 1, linhaAtual.length).setValues([linhaAtual]);
+      return { ok: true, acao: 'atualizado', mensagem: 'Item PA atualizado!' };
+    }
+    if (!dados.descricao) return { ok: false, mensagem: 'Descrição obrigatória.' };
+    sh.appendRow(header.map(col => {
+      const c = String(col).trim();
+      switch(c) {
+        case 'CÓDIGO':    return codigo;
+        case 'DESCRIÇÃO': return dados.descricao || '';
+        case 'Situação':  return dados.situacao  || 'ATIVO';
+        default:          return '';
+      }
+    }));
+    return { ok: true, acao: 'criado', mensagem: 'Item PA criado!' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MOVIMENTOS INSUMOS
+// ════════════════════════════════════════════════════════════════════════════
+function listarMovimentos() {
+  try {
+    const sh = _sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const h    = data[0];
+    const idxN = {};
+    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
+    const celN = (r, ...keys) => {
+      for (const k of keys) { if (idxN[k] != null) return String(r[idxN[k]] || ''); }
+      return '';
+    };
+    const iD = h.map((v,i) => _norm(v) === 'data' ? i : -1).filter(i => i >= 0)[0] ?? -1;
+    const fmt = (r, i) => i >= 0 && r[i]
+      ? Utilities.formatDate(new Date(r[i]), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : '';
+    return data.slice(1).filter(r => celN(r,'id') !== '').map(r => ({
+      id:        celN(r,'id'),
+      data:      fmt(r, iD),
+      tipo:      celN(r,'tipo'),
+      op:        celN(r,'n da op','op'),
+      codigo:    celN(r,'codigo'),
+      descricao: celN(r,'descricao'),
+      qtde:      Number(idxN['qtde'] != null ? r[idxN['qtde']] || 0 : 0),
+      endereco:  celN(r,'endereco'),
+      obs:       celN(r,'obs'),
+      usuario:   celN(r,'user','usuario'),
+    }));
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// Lê o saldo já calculado na coluna ESTOQUE_ATUAL do Cadastro (coluna O), em
+// vez de somar o histórico inteiro de Movimento — Cadastro tem 1 linha por
+// item (tamanho fixo), Movimento cresce para sempre a cada transação.
+function obterSaldo(codigo) {
+  try {
+    const sh   = _sh(NOME_ABA_CADASTRO);
+    if (!sh) return 0;
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    if (iCOD < 0 || iEA < 0) return 0;
+    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
+    return row ? Number(row[iEA]||0) : 0;
+  } catch(e) { return 0; }
+}
+
+function obterEnderecosSaldo(codigo) {
+  try {
+    const sh   = _sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { saldo: 0, enderecos: [] };
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const idxN = {};
+    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
+    const iT = idxN['tipo'] ?? -1, iC = idxN['codigo'] ?? -1;
+    const iQ = idxN['qtde'] ?? -1, iE = idxN['endereco'] ?? -1;
+    if (iT < 0 || iC < 0 || iQ < 0) return { saldo: 0, enderecos: [] };
+    let saldoTotal = 0;
+    const porEnd   = {};
+    for (let i = 1; i < data.length; i++) {
+      const r = data[i];
+      if (String(r[iC]||'').trim() !== String(codigo).trim()) continue;
+      const t   = String(r[iT]||'').toUpperCase();
+      const q   = Number(r[iQ]||0);
+      const key = (iE >= 0 ? String(r[iE]||'').trim() : '') || '(sem endereço)';
+      const inc = t === 'ENTRADA' ? q : -q;
+      saldoTotal    += inc;
+      porEnd[key]    = (porEnd[key] || 0) + inc;
+    }
+    return {
+      saldo: saldoTotal,
+      enderecos: Object.entries(porEnd).map(([endereco, s]) => ({ endereco, saldo: s })).filter(x => x.saldo > 0).sort((a,b) => b.saldo - a.saldo)
+    };
+  } catch(e) { return { saldo: 0, enderecos: [] }; }
+}
+
+function gravarMovimento(dados) {
+  try {
+    const codigo = String(dados.codigo || '').trim();
+    if (!codigo) return { ok: false, mensagem: 'Código não informado.' };
+    const mapa = _mapaStatusCadastro();
+    if (mapa[codigo] === undefined) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
+    if (mapa[codigo] === 'INATIVO')  return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
+    const sh = _sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const header      = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const linhasAntes = sh.getLastRow();
+    const isSaida     = String(dados.tipo||'').toUpperCase() === 'SAIDA';
+    const qtde        = Number(dados.qtde || 0);
+    const agora       = new Date();
+    const ids         = [];
+    if (isSaida) {
+      const { saldo: saldoTotal, enderecos } = obterEnderecosSaldo(codigo);
+      if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
+      const dist = _distribuirPorEndereco(enderecos, qtde);
+      if (!dist) return { ok: false, mensagem: `Não foi possível distribuir o saldo.` };
+      for (const { endereco, qtde: q } of dist) {
+        const id = Utilities.getUuid().substring(0,8); ids.push(id);
+        sh.appendRow(_montarLinhaMovimento(header, Object.assign({}, dados, { id, data: agora, qtde: q, endereco, codigo })));
+      }
+    } else {
+      const id = Utilities.getUuid().substring(0,8); ids.push(id);
+      sh.appendRow(_montarLinhaMovimento(header, Object.assign({}, dados, { id, data: agora, codigo })));
+    }
+    const verif = _verificarGravacao(sh, ids, linhasAntes);
+    if (!verif.ok) return { ok: false, mensagem: 'Movimento não confirmado. ' + (verif.erro||'') };
+    return { ok: true, gravados: ids.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+function gravarMovimentosEmLote(movimentos) {
+  try {
+    if (!movimentos?.length) return { ok: false, mensagem: 'Nenhum movimento.' };
+    const sh = _sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const dadosSh    = sh.getDataRange().getValues();
+    const header     = dadosSh[0];
+    const linhasAntes = dadosSh.length;
+    const saldosMap  = _saldosEmMemoria(dadosSh, header);
+    const saldoTotal = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
+    const mapa = _mapaStatusCadastro();
+    const erros = [], ids = [], agora = new Date();
+    for (const mov of movimentos) {
+      const cod = String(mov.codigo||'').trim();
+      if (!cod) { erros.push('Código ausente.'); continue; }
+      if (mapa[cod] === undefined) { erros.push(`'${cod}' não cadastrado.`); continue; }
+      if (mapa[cod] === 'INATIVO')  { erros.push(`'${cod}' INATIVO.`); continue; }
+      if (String(mov.tipo||'').toUpperCase() === 'SAIDA') {
+        const s = saldoTotal(cod);
+        if (Number(mov.qtde||0) > s) erros.push(`Saldo insuficiente '${cod}': disponível ${s}.`);
+      }
+    }
+    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
+    const linhas = [];
+    for (const mov of movimentos) {
+      const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
+      const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', localizacao: mov.localizacao||'', computer: mov.computer||'', ip: mov.ip||'' };
+      if (String(mov.tipo||'').toUpperCase() === 'SAIDA') {
+        const dist = _distribuirPorEndereco(saldosMap[cod]||[], qtde) || [{ endereco: mov.endereco||'', qtde }];
+        for (const { endereco, qtde: q } of dist) {
+          const id = Utilities.getUuid().substring(0,8); ids.push(id);
+          linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde: q, endereco })));
+        }
+      } else {
+        const id = Utilities.getUuid().substring(0,8); ids.push(id);
+        linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: mov.endereco||'' })));
+      }
+    }
+    if (!linhas.length) return { ok: true, gravados: 0 };
+    sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
+    SpreadsheetApp.flush();
+    return { ok: true, gravados: ids.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro lote: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MOVIMENTOS PA
+// ════════════════════════════════════════════════════════════════════════════
+function listarMovimentosPA() {
+  try {
+    const sh = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const h    = data[0];
+    const idxN = {};
+    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
+    const celN = (r, ...keys) => { for (const k of keys) { if (idxN[k] != null) return String(r[idxN[k]]||''); } return ''; };
+    const iD = idxN['data'] ?? -1;
+    const fmt = (r, i) => i >= 0 && r[i] ? Utilities.formatDate(new Date(r[i]), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : '';
+    return data.slice(1).filter(r => celN(r,'id') !== '').map(r => ({
+      id: celN(r,'id'), data: fmt(r,iD), tipo: celN(r,'tipo'), op: celN(r,'op','n da op'),
+      codigo: celN(r,'codigo'), descricao: celN(r,'descricao'),
+      qtde: Number(idxN['qtde'] != null ? r[idxN['qtde']]||0 : 0),
+      endereco: celN(r,'endereco'), obs: celN(r,'obs'), usuario: celN(r,'usuario','user'),
+    }));
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// Lê o saldo já calculado na coluna ESTOQUE_ATUAL do Cadastro_PA (coluna U),
+// em vez de somar ESTOQUE_INICIAL + histórico inteiro de Movimento_PA.
+function obterSaldoPA(codigo) {
+  try {
+    const sh   = _sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return 0;
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    if (iCOD < 0 || iEA < 0) return 0;
+    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
+    return row ? Number(row[iEA]||0) : 0;
+  } catch(e) { return 0; }
+}
+
+function _estoqueInicialPA(codigo) {
+  try {
+    const sh = _sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return 0;
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO');
+    const iEI  = _idxCol(h, 'ESTOQUE_INICIAL');
+    if (iCOD < 0 || iEI < 0) return 0;
+    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
+    return row ? Number(row[iEI]||0) : 0;
+  } catch(e) { return 0; }
+}
+
+function obterEnderecosSaldoPA(codigo) {
+  try {
+    const sh   = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { saldo: 0, enderecos: [] };
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const idxN = {};
+    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
+    const iT = idxN['tipo']??-1, iC = idxN['codigo']??-1, iQ = idxN['qtde']??-1, iE = idxN['endereco']??-1;
+    if (iT<0||iC<0||iQ<0) return { saldo: 0, enderecos: [] };
+    let saldoTotal = _estoqueInicialPA(codigo);
+    const porEnd   = {};
+    for (let i = 1; i < data.length; i++) {
+      const r = data[i];
+      if (String(r[iC]||'').trim() !== String(codigo).trim()) continue;
+      const t = String(r[iT]||'').toUpperCase(), q = Number(r[iQ]||0);
+      const key = (iE>=0 ? String(r[iE]||'').trim() : '') || '(sem endereço)';
+      saldoTotal    += (t==='ENTRADA'?q:-q);
+      porEnd[key]    = (porEnd[key]||0) + (t==='ENTRADA'?q:-q);
+    }
+    return { saldo: saldoTotal, enderecos: Object.entries(porEnd).map(([endereco,s])=>({endereco,saldo:s})).filter(x=>x.saldo>0).sort((a,b)=>b.saldo-a.saldo) };
+  } catch(e) { return { saldo: 0, enderecos: [] }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  gravarMovimentoPA — com baixa automática de insumos via Estrutura
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+//  gravarMovimentoPA — otimizado: 2 leituras totais + idempotência por chave
+// ════════════════════════════════════════════════════════════════════════════
+function gravarMovimentoPA(dados) {
+  try {
+    const codigo   = String(dados.codigo||'').trim();
+    const isSaida  = String(dados.tipo||'').toUpperCase() === 'SAIDA';
+    const qtde     = Number(dados.qtde||0);
+    const chaveIdem= String(dados.chaveIdem||'').trim(); // proteção contra dupla gravação
+
+    if (!codigo) return { ok: false, mensagem: 'Código PA não informado.' };
+    if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
+
+    // ── Leitura 1: Cadastro_PA (validação) ───────────────────────────────
+    const mapa = _mapaStatusCadastroPA();
+    if (mapa[codigo] === undefined) return { ok: false, mensagem: `Item PA '${codigo}' não encontrado.` };
+    if (mapa[codigo] === 'INATIVO')  return { ok: false, mensagem: `Item PA '${codigo}' está INATIVO.` };
+
+    // ── Leitura 2: Movimento_PA (saldo + idempotência) ────────────────────
+    const shPA    = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!shPA) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+    const dadosPA = shPA.getDataRange().getValues();
+    const headerPA= dadosPA[0];
+
+    // Checa idempotência — se já existe um registro com essa chave, retorna ok sem gravar
+    if (chaveIdem) {
+      const iChave = headerPA.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosPA.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    const saldosPA   = _saldosEmMemoria(dadosPA, headerPA);
+    const linhasAntes= dadosPA.length;
+    const agora      = new Date();
+    const ids        = [];
+    const base       = {
+      data: agora, qrcode: dados.qrcode||'', tipo: dados.tipo||'',
+      op: dados.op||'', codigo, descricao: dados.descricao||'',
+      obs: dados.obs||'', usuario: dados.usuario||'',
+      computer: dados.computer||'', localizacao: dados.localizacao||'',
+      ip: dados.ip||'', chave: chaveIdem,
+    };
+
+    if (isSaida) {
+      const enderecos = saldosPA[codigo] || [];
+      const saldoTotal= enderecos.reduce((s, e) => s + e.saldo, 0);
+      if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo PA insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
+      const dist = _distribuirPorEndereco(enderecos, qtde);
+      if (!dist) return { ok: false, mensagem: 'Não foi possível distribuir o saldo.' };
+      for (const { endereco, qtde: q } of dist) {
+        const id = Utilities.getUuid().substring(0, 8); ids.push(id);
+        shPA.appendRow(_montarLinhaMovimento(headerPA, Object.assign({}, base, { id, qtde: q, endereco })));
+      }
+    } else {
+      const id = Utilities.getUuid().substring(0, 8); ids.push(id);
+      shPA.appendRow(_montarLinhaMovimento(headerPA, Object.assign({}, base, { id, qtde, endereco: dados.endereco||'' })));
+    }
+
+    SpreadsheetApp.flush();
+
+    // ── Leitura 3 (só insumos, só se saída): Estrutura + Movimento ────────
+    // prepararBaixaInsumos é chamado SEPARADAMENTE pelo frontend
+    // gravarMovimentoPA não baixa insumos automaticamente — o frontend controla
+    return { ok: true, gravados: ids.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro ao gravar PA: ' + e.message }; }
+}
+
+function gravarMovimentosEmLotePA(movimentos) {
+  try {
+    if (!movimentos?.length) return { ok: false, mensagem: 'Nenhum movimento PA.' };
+    const sh = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+    const dadosSh     = sh.getDataRange().getValues();
+    const header      = dadosSh[0];
+    const linhasAntes = dadosSh.length;
+    const saldosMap   = _saldosEmMemoria(dadosSh, header);
+    const saldoTotal  = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
+    const mapa = _mapaStatusCadastroPA();
+    const erros = [], ids = [], agora = new Date();
+    for (const mov of movimentos) {
+      const cod = String(mov.codigo||'').trim();
+      if (!cod) { erros.push('Código PA ausente.'); continue; }
+      if (mapa[cod]===undefined) { erros.push(`PA '${cod}' não cadastrado.`); continue; }
+      if (mapa[cod]==='INATIVO')  { erros.push(`PA '${cod}' INATIVO.`); continue; }
+      if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
+        const s = saldoTotal(cod);
+        if (Number(mov.qtde||0) > s) erros.push(`Saldo PA insuficiente '${cod}': disponível ${s}.`);
+      }
+    }
+    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
+    const linhas = [];
+    for (const mov of movimentos) {
+      const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
+      const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', obs: mov.obs||'', usuario: mov.usuario||'', computer: mov.computer||'', localizacao: mov.localizacao||'', ip: mov.ip||'' };
+      if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
+        const dist = _distribuirPorEndereco(saldosMap[cod]||[], qtde) || [{ endereco: mov.endereco||'', qtde }];
+        for (const { endereco, qtde: q } of dist) {
+          const id = Utilities.getUuid().substring(0,8); ids.push(id);
+          linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde: q, endereco })));
+        }
+      } else {
+        const id = Utilities.getUuid().substring(0,8); ids.push(id);
+        linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: mov.endereco||'' })));
+      }
+    }
+    if (!linhas.length) return { ok: true, gravados: 0 };
+    sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
+    SpreadsheetApp.flush();
+    return { ok: true, gravados: ids.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro lote PA: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  pagarOPTriangularPA — com baixa automática de insumos via Estrutura
+// ════════════════════════════════════════════════════════════════════════════
+function pagarOPTriangularPA(dados) {
+  try {
+    const codOrigem  = String(dados.codOrigem  || '').trim();
+    const codDestino = String(dados.codDestino || '').trim();
+    const qtde       = Number(dados.qtde || 0);
+    const op         = String(dados.op   || '').trim();
+    const usuario    = dados.usuario    || '';
+    const computer   = dados.computer   || '';
+    const localizacao= dados.localizacao|| '';
+    const ip         = dados.ip         || '';
+
+    if (!codOrigem)  return { ok: false, mensagem: 'Código de origem não informado.' };
+    if (!codDestino) return { ok: false, mensagem: 'Código de destino não informado.' };
+    if (codOrigem === codDestino) return { ok: false, mensagem: 'Origem e destino não podem ser iguais.' };
+    if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
+
+    const mapa = _mapaStatusCadastroPA();
+    if (mapa[codOrigem]  === undefined) return { ok: false, mensagem: `PA origem '${codOrigem}' não cadastrado.` };
+    if (mapa[codOrigem]  === 'INATIVO')  return { ok: false, mensagem: `PA origem '${codOrigem}' INATIVO.` };
+    if (mapa[codDestino] === undefined) return { ok: false, mensagem: `PA destino '${codDestino}' não cadastrado.` };
+    if (mapa[codDestino] === 'INATIVO')  return { ok: false, mensagem: `PA destino '${codDestino}' INATIVO.` };
+
+    const saldoOrigem = obterSaldoPA(codOrigem);
+    if (qtde > saldoOrigem) return { ok: false, mensagem: `Saldo insuficiente para ${codOrigem}. Disponível: ${saldoOrigem}.` };
+
+    // Busca descrições e endereços
+    const shCad   = _sh(NOME_ABA_CADASTRO_PA);
+    const dataCad = shCad ? shCad.getDataRange().getValues() : [];
+    const hCad    = dataCad[0] || [];
+    const iCodCad = _idxCol(hCad, 'CÓDIGO');
+    const iDescCad= hCad.findIndex(v => _norm(v) === 'descricao');
+    const iEndCad = hCad.findIndex(v => _norm(v) === 'endereco');
+    const findRow = (cod) => dataCad.slice(1).find(r => String(r[iCodCad]||'').trim() === cod);
+    const rowOri  = findRow(codOrigem);
+    const rowDes  = findRow(codDestino);
+    const descOri = (rowOri && iDescCad >= 0) ? String(rowOri[iDescCad]||'') : '';
+    const descDes = (rowDes && iDescCad >= 0) ? String(rowDes[iDescCad]||'') : '';
+    const endOri  = (rowOri && iEndCad  >= 0) ? String(rowOri[iEndCad] ||'') : '';
+    const endDes  = (rowDes && iEndCad  >= 0) ? String(rowDes[iEndCad] ||'') : '';
+
+    const sh     = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+    const header = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+    const agora  = new Date();
+    const base   = { qtde, op, usuario, computer, localizacao, ip, qrcode: '' };
+
+    // Grava os 3 movimentos triangulares
+    const linhas = [
+      _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'SAIDA',   codigo: codOrigem,  descricao: descOri, endereco: endOri, obs: `Triangular SAIDA VIA OP: ${op} PARA: ${codDestino}` })),
+      _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'ENTRADA', codigo: codDestino, descricao: descDes, endereco: endDes, obs: `Triangular ENTRADA VIA OP: ${op} DE: ${codOrigem}` })),
+      _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'SAIDA',   codigo: codDestino, descricao: descDes, endereco: endDes, obs: `Triangular SAIDA VIA OP: ${op}` })),
+    ];
+    linhas.forEach(l => sh.appendRow(l)); // 3 linhas apenas — ok
+    SpreadsheetApp.flush();
+
+    // ── Baixa automática dos insumos do produto DESTINO ───────────────────
+    // (é o destino que sai — consome os insumos de embalagem)
+    const insumos = _baixarInsumosDaEstrutura(codDestino, qtde, { op, usuario, computer, localizacao, ip });
+
+    return { ok: true, gravados: 3, insumos };
+  } catch(e) { return { ok: false, mensagem: 'Erro Triangular: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  OPs — retorna pedido, origem, estado (ABERTA/PAGO/EM_BAIXA), foto, zpl
+// ════════════════════════════════════════════════════════════════════════════
+function listarOPS() {
+  try {
+    const sh = _sh(NOME_ABA_OPS);
+    if (!sh) return { ok: false, mensagem: 'Aba OPS não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    if (data.length < 2) return [];
+    const h   = data[0];
+    const idx = {};
+    h.forEach((v,i) => { idx[String(v||'').trim().toUpperCase()] = i; });
+    const get = (row, col) => col != null && col >= 0 ? String(row[col]||'').trim() : '';
+
+    // Coleta OPs que já têm movimento (pagas)
+    const opsPagas = new Set();
+    const _coletar = (nomeAba) => {
+      try {
+        const shM = _sh(nomeAba); if (!shM) return;
+        const rows = shM.getDataRange().getValues();
+        const hM   = rows[0];
+        const iOP  = hM.findIndex(v => { const k=_norm(v); return k==='op'||k==='n da op'; });
+        if (iOP<0) return;
+        for (let i=1; i<rows.length; i++) {
+          const op = String(rows[i][iOP]||'').trim();
+          if (op) opsPagas.add(op);
+        }
+      } catch(e) {}
+    };
+    _coletar(NOME_ABA_MOVIMENTO);
+    _coletar(NOME_ABA_MOVIMENTO_PA);
+
+    // Mapa de fotos (PA e Insumos)
+    const mapaFotos = {};
+    const lerFotos  = (nomeAba, colCod, colFoto) => {
+      try {
+        const shF = _sh(nomeAba); if (!shF) return;
+        const d   = shF.getDataRange().getValues(), hF = d[0];
+        const iC  = _idxCol(hF, colCod), iF = _idxCol(hF, colFoto);
+        if (iC < 0 || iF < 0) return;
+        d.slice(1).forEach(r => {
+          const c = String(r[iC]||'').trim();
+          if (c && !mapaFotos[c]) mapaFotos[c] = String(r[iF]||'').trim();
+        });
+      } catch(e) {}
+    };
+    lerFotos(NOME_ABA_CADASTRO_PA, 'CÓDIGO', 'FOTO_SHEETS');
+    lerFotos(NOME_ABA_CADASTRO_PA, 'CÓDIGO', 'Endereço_Foto');
+    lerFotos(NOME_ABA_CADASTRO,    'CÓDIGO', 'Endereço_Foto');
+
+    // Índices das colunas — compatível com nomes maiúsculos/minúsculos
+    const iOP      = idx['OP']      ?? idx['N_OP']     ?? -1;
+    const iPedido  = idx['PEDIDO']  ?? idx['N_PEDIDO'] ?? -1;
+    const iCodigo  = idx['CODIGO']  ?? idx['CÓDIGO']   ?? -1;
+    const iDesc    = idx['DESCRICAO']?? idx['DESCRIÇÃO']?? -1;
+    const iQtde    = idx['QTDE']    ?? idx['QUANTIDADE']?? -1;
+    const iOrigem  = idx['ORIGEM']  ?? -1;
+    const iPosicao = idx['POSICAO'] ?? idx['POSIÇÃO']  ?? -1;
+    const iObs     = idx['OBS']     ?? idx['OBSERVACAO']?? -1;
+    const iZPL     = idx['ZPL']        ?? -1;
+    const iMetal   = idx['METALIZADA'] ?? -1;
+    const iSilk    = idx['SILK']       ?? -1;
+
+    return data.slice(1)
+      .filter(r => {
+        const pos = get(r, iPosicao).toUpperCase();
+        return pos === 'ESTOQUE' || pos === 'PAGO' || pos === 'EM BAIXA';
+      })
+      .map(r => {
+        const opNum  = get(r, iOP);
+        const codigo = get(r, iCodigo);
+        const origem = get(r, iOrigem).toUpperCase(); // 'INSUMO' | 'PA'
+        const isPA   = origem === 'PA';
+        const posicaoPlanilha = get(r, iPosicao).toUpperCase();
+
+        // Estado: PAGO se já tem movimento, EM_BAIXA se planilha diz, senão ABERTA
+        let estado;
+        if (opsPagas.has(opNum))          estado = 'PAGO';
+        else if (posicaoPlanilha === 'EM BAIXA') estado = 'EM_BAIXA';
+        else                               estado = 'ABERTA';
+
+        return {
+          op:       opNum,
+          pedido:   get(r, iPedido),
+          codigo,
+          descricao: get(r, iDesc),
+          qtde:     Number(r[iQtde < 0 ? 0 : iQtde]||0),
+          origem,                          // 'INSUMO' | 'PA'
+          isPA,
+          estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA'
+          obs:      get(r, iObs),
+          zpl:      get(r, iZPL),
+          zplMetal: get(r, iMetal),
+          silk:     get(r, iSilk),
+          fotoUrl:  mapaFotos[codigo] || '',
+        };
+      });
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  BOM
+// ════════════════════════════════════════════════════════════════════════════
+function prepararEListarBOM(opNumero) {
+  try {
+    const shBom = _sh(NOME_ABA_BOM);
+    if (!shBom) return { ok: false, mensagem: 'Aba BOM não encontrada.' };
+    shBom.getRange('A2').setValue(String(opNumero).trim());
+    SpreadsheetApp.flush();
+
+    // As colunas QTDE_BOM/SALDO dependem de fórmulas que recalculam após o
+    // flush. Em vez de um sleep fixo de 3s (sempre pago, mesmo quando a
+    // planilha já recalculou em 300ms), faz polling curto e sai assim que
+    // duas leituras seguidas derem o mesmo resultado — mesmo teto de espera
+    // (10×300ms=3s) do sleep antigo, mas normalmente sai bem antes.
+    let data = shBom.getDataRange().getValues();
+    for (let tentativa = 0; tentativa < 10; tentativa++) {
+      Utilities.sleep(300);
+      const proxima = shBom.getDataRange().getValues();
+      if (JSON.stringify(proxima) === JSON.stringify(data)) { data = proxima; break; }
+      data = proxima;
+    }
+    if (data.length < 2) return { ok: true, itens: [] };
+    const header = data[0];
+    const idx    = {}, idxN = {};
+    header.forEach((v,i) => { idx[String(v).trim().toUpperCase()]=i; const k=_norm(v); if(!idxN[k]) idxN[k]=i; });
+    const iOrdem   = idx['ORDEM']??0, iCodigo=idx['CODIGO']??1, iDesc=idx['DESCRICAO']??2;
+    const iOP      = idx['OP']??3, iBom=idx['QTDE_BOM']??idx['QTD_BOM']??5;
+    const iPedido  = idx['QTDE_PEDIDO']??idx['QTD_PEDIDO']??6, iSaldo=idx['SALDO']??7;
+    const iTipoMov = idxN['tipomov']??idxN['tipo mov']??idx['TIPO_MOV']??-1;
+    const op=String(opNumero).trim(), opNorm=op.replace(/[^0-9a-zA-Z]/g,'').toLowerCase();
+    const itens = data.slice(1)
+      .filter(r => { const opPlan=String(r[iOP]||'').trim(); return (opPlan===op||opPlan.replace(/[^0-9a-zA-Z]/g,'').toLowerCase()===opNorm) && String(r[iCodigo]||'').trim()!==''; })
+      .map(r => {
+        const qtdBom=Number(r[iBom]||0), qtdPedido=Number(r[iPedido]||0), saldo=Number(r[iSaldo]||0), qtdBaixar=qtdBom*qtdPedido;
+        const tipoMov = iTipoMov>=0 ? String(r[iTipoMov]||'').trim().toUpperCase()||'INSUMO' : 'INSUMO';
+        return { ordem:String(r[iOrdem]||'').trim(), codigo:String(r[iCodigo]||'').trim(), descricao:String(r[iDesc]||'').trim(), qtdBom, qtdPedido, qtdBaixar, saldoEstoque:saldo, permitido:saldo>=qtdBaixar, tipoMov };
+      });
+    return { ok: true, itens };
+  } catch(e) { return { ok: false, mensagem: 'Erro BOM: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  prepararBOMComSaldo — BOM + saldo atual de cada item em memória
+//  Igual ao prepararEListarBOM mas enriquece cada item com saldoAtual
+//  para exibir no modal com checkbox + quantidade ajustável
+// ════════════════════════════════════════════════════════════════════════════
+function prepararBOMComSaldo(opNumero) {
+  try {
+    // Passo 1: carrega a BOM normalmente (escreve OP na célula A2 e lê)
+    const resBom = prepararEListarBOM(opNumero);
+    if (!resBom.ok) return resBom;
+    if (!resBom.itens.length) return { ok: true, itens: [] };
+
+    // Passo 2: lê saldos de Insumos e PA em memória (uma leitura cada)
+    const saldosIns = (() => {
+      try {
+        const sh = _sh(NOME_ABA_MOVIMENTO);
+        if (!sh) return {};
+        const d = sh.getDataRange().getValues();
+        const sm = _saldosEmMemoria(d, d[0]);
+        const tot = {};
+        for (const [cod, ends] of Object.entries(sm))
+          tot[cod] = ends.reduce((s, e) => s + e.saldo, 0);
+        return tot;
+      } catch(e) { return {}; }
+    })();
+
+    const saldosPA = (() => {
+      try {
+        const sh = _sh(NOME_ABA_MOVIMENTO_PA);
+        if (!sh) return {};
+        const d = sh.getDataRange().getValues();
+        const sm = _saldosEmMemoria(d, d[0]);
+        const tot = {};
+        for (const [cod, ends] of Object.entries(sm))
+          tot[cod] = ends.reduce((s, e) => s + e.saldo, 0);
+        return tot;
+      } catch(e) { return {}; }
+    })();
+
+    // Passo 3: enriquece cada item com saldoAtual
+    const itens = resBom.itens.map(it => {
+      const saldoAtual = it.tipoMov === 'PA'
+        ? (saldosPA[it.codigo] || 0)
+        : (saldosIns[it.codigo] || 0);
+      return {
+        ...it,
+        saldoAtual,
+        suficiente: saldoAtual >= it.qtdBaixar,
+      };
+    });
+
+    return { ok: true, itens };
+  } catch(e) { return { ok: false, mensagem: 'Erro BOM com saldo: ' + e.message }; }
+}
+
+function baixarBOMComTipo(movimentos, dadosBase) {
+  try {
+    if (!movimentos?.length) return { ok: false, mensagem: 'Nenhum item para baixar.' };
+    const op=String(dadosBase.op||'').trim(), usuario=String(dadosBase.usuario||''), computer=String(dadosBase.computer||''), localizacao=String(dadosBase.localizacao||''), ip=String(dadosBase.ip||''), obs=String(dadosBase.obs||'');
+    const listaInsumo=[], listaPA=[];
+    for (const item of movimentos) {
+      const tipo = String(item.tipoMov||'INSUMO').trim().toUpperCase();
+      const mov  = { codigo:String(item.codigo||'').trim(), descricao:String(item.descricao||''), qtde:Number(item.qtdBaixar||0), tipo:'SAIDA', op, usuario, computer, localizacao, ip, obs:obs||'Baixa BOM — OP '+op, qrcode:'', endereco:'', chave:'' };
+      if (tipo==='PA') listaPA.push(mov); else listaInsumo.push(mov);
+    }
+    const resultados = { ok:true, insumos:null, pa:null, erros:[] };
+    if (listaInsumo.length>0) { const r=gravarMovimentosEmLote(listaInsumo); resultados.insumos=r; if(!r.ok) resultados.erros.push('INSUMOS: '+r.mensagem); }
+    if (listaPA.length>0)     { const r=gravarMovimentosEmLotePA(listaPA);   resultados.pa=r;      if(!r.ok) resultados.erros.push('PA: '+r.mensagem); }
+    if (resultados.erros.length>0) { resultados.ok=false; resultados.mensagem=resultados.erros.join('\n'); }
+    else { const g=(resultados.insumos?.gravados||0)+(resultados.pa?.gravados||0); resultados.mensagem=`Baixa concluída: ${g} movimento(s).`; resultados.gravados=g; }
+    return resultados;
+  } catch(e) { return { ok: false, mensagem: 'Erro BOM: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  MUDANÇA DE ENDEREÇO
+// ════════════════════════════════════════════════════════════════════════════
+function mudarEndereco(dados) {
+  try {
+    const codigo=String(dados.codigo||'').trim(), endOrigem=String(dados.endOrigem||'').trim(), endDestino=String(dados.endDestino||'').trim(), qtde=Number(dados.qtde||0);
+    if (!codigo||!endOrigem||!endDestino||endOrigem===endDestino||!qtde||qtde<=0) return { ok:false, mensagem:'Dados inválidos.' };
+    const { enderecos } = obterEnderecosSaldo(codigo);
+    const endObj = enderecos.find(e => e.endereco===endOrigem);
+    if (!endObj||qtde>endObj.saldo) return { ok:false, mensagem:`Saldo insuficiente em '${endOrigem}'.` };
+    const sh=_sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { ok:false, mensagem:'Aba Movimento não encontrada.' };
+    const header=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+    const linhasAntes=sh.getLastRow(), agora=new Date();
+    const base={ data:agora, qrcode:'', op:'', codigo, descricao:dados.descricao||'', chave:'', obs:`Mudança: ${endOrigem} → ${endDestino}`, usuario:dados.usuario||'', localizacao:dados.localizacao||'', computer:dados.computer||'', ip:dados.ip||'' };
+    const idS=Utilities.getUuid().substring(0,8), idE=Utilities.getUuid().substring(0,8);
+    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idS,tipo:'SAIDA',  qtde,endereco:endOrigem })));
+    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idE,tipo:'ENTRADA',qtde,endereco:endDestino})));
+    const verif=_verificarGravacao(sh,[idS,idE],linhasAntes);
+    if (!verif.ok) return { ok:false, mensagem:'Mudança não confirmada.' };
+    return { ok:true, gravados:2 };
+  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+}
+
+function mudarEnderecoPA(dados) {
+  try {
+    const codigo=String(dados.codigo||'').trim(), endOrigem=String(dados.endOrigem||'').trim(), endDestino=String(dados.endDestino||'').trim(), qtde=Number(dados.qtde||0);
+    if (!codigo||!endOrigem||!endDestino||endOrigem===endDestino||!qtde||qtde<=0) return { ok:false, mensagem:'Dados inválidos.' };
+    const { enderecos } = obterEnderecosSaldoPA(codigo);
+    const endObj = enderecos.find(e => e.endereco===endOrigem);
+    if (!endObj||qtde>endObj.saldo) return { ok:false, mensagem:`Saldo insuficiente em '${endOrigem}'.` };
+    const sh=_sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { ok:false, mensagem:'Aba Movimento_PA não encontrada.' };
+    const header=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
+    const linhasAntes=sh.getLastRow(), agora=new Date();
+    const base={ data:agora, qrcode:'', op:'', codigo, descricao:dados.descricao||'', chave:'', obs:`Mudança PA: ${endOrigem} → ${endDestino}`, usuario:dados.usuario||'', localizacao:dados.localizacao||'', computer:dados.computer||'', ip:dados.ip||'' };
+    const idS=Utilities.getUuid().substring(0,8), idE=Utilities.getUuid().substring(0,8);
+    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idS,tipo:'SAIDA',  qtde,endereco:endOrigem })));
+    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idE,tipo:'ENTRADA',qtde,endereco:endDestino})));
+    const verif=_verificarGravacao(sh,[idS,idE],linhasAntes);
+    if (!verif.ok) return { ok:false, mensagem:'Mudança PA não confirmada.' };
+    return { ok:true, gravados:2 };
+  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  EMBARQUE / DI
+// ════════════════════════════════════════════════════════════════════════════
+function listarEmbarque() {
+  try {
+    const shEmb=_sh(NOME_ABA_EMBARQUE);
+    if (!shEmb) return { ok:false, mensagem:'Aba Embarque não encontrada.' };
+    const lastRow=shEmb.getLastRow();
+    if (lastRow<2) return { ok:true, itens:[] };
+    const dados=shEmb.getRange(2,17,lastRow-1,26).getValues();
+    const shMov=_sh(NOME_ABA_MOVIMENTO);
+    const idsLancados=new Set();
+    if (shMov&&shMov.getLastRow()>1) {
+      shMov.getRange(2,1,shMov.getLastRow()-1,1).getValues().forEach(r=>{ if(r[0]) idsLancados.add(String(r[0]).trim()); });
+    }
+    const itens=dados.filter(r=>String(r[2]||'').trim()!=='').map(r=>({
+      codigo:String(r[2]||'').trim(), descricao:String(r[3]||'').trim(), qtde:Number(r[4]||0),
+      peso:Number(r[5]||0), usdUnit:Number(r[6]||0), mov_id:String(r[13]||'').trim(),
+      mov_codigo:String(r[18]||'').trim(), mov_qtde:Number(r[19]||0), mov_tipo:String(r[16]||'').trim(),
+      mov_op:String(r[17]||'').trim(), mov_obs:String(r[22]||'').trim(), mov_usuario:String(r[23]||'').trim(),
+      jaLancado:idsLancados.has(String(r[13]||'').trim()),
+    }));
+    return { ok:true, itens };
+  } catch(e) { return { ok:false, mensagem:'Erro embarque: '+e.message }; }
+}
+
+function gravarEntradaDI(item) {
+  try {
+    if (!item?.mov_id||!item?.mov_codigo) return { ok:false, mensagem:'Dados insuficientes.' };
+    const shMov=_sh(NOME_ABA_MOVIMENTO);
+    if (!shMov) return { ok:false, mensagem:'Aba Movimento não encontrada.' };
+    const lastRowMov=shMov.getLastRow();
+    if (lastRowMov>1) {
+      const ids=shMov.getRange(2,1,lastRowMov-1,1).getValues();
+      if (ids.some(r=>String(r[0]).trim()===item.mov_id)) return { ok:false, mensagem:`ID '${item.mov_id}' já lançado.` };
+    }
+    const headerMov=shMov.getRange(1,1,1,shMov.getLastColumn()).getValues()[0];
+    const linha=_montarLinhaMovimento(headerMov,{ id:item.mov_id, data:new Date(), qrcode:item.mov_qrcode||'', tipo:item.mov_tipo||'ENTRADA', op:item.mov_op||'', codigo:item.mov_codigo, descricao:item.descricao||'', qtde:Number(item.mov_qtde||0), endereco:item.mov_endereco||'', chave:item.mov_chave||'', obs:item.mov_obs||'', usuario:item.mov_usuario||'', localizacao:item.mov_loc||'', computer:'', ip:item.mov_ip||'' });
+    shMov.getRange(lastRowMov+1,1,1,headerMov.length).setValues([linha]);
+    SpreadsheetApp.flush();
+    return { ok:true };
+  } catch(e) { return { ok:false, mensagem:'Erro DI: '+e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PRINTNODE
+// ════════════════════════════════════════════════════════════════════════════
+function _printNode(printerId, titulo, conteudo) {
+  try {
+    const res=UrlFetchApp.fetch('https://api.printnode.com/printjobs',{ method:'post', contentType:'application/json', payload:JSON.stringify({ printerId, title:titulo, contentType:'raw_base64', content:Utilities.base64Encode(conteudo.toString(),Utilities.Charset.UTF_8), source:'GAS-Estoque' }), muteHttpExceptions:true, headers:{ 'Authorization':'Basic '+Utilities.base64Encode(PRINTNODE_API_KEY+':') } });
+    const code=res.getResponseCode();
+    return code>=200&&code<300 ? { ok:true } : { ok:false, mensagem:'PrintNode HTTP '+code };
+  } catch(e) { return { ok:false, mensagem:e.message }; }
+}
+
+// Envia um PDF (já em base64) para a impressora de cartões via PrintNode.
+// Diferente de _printNode: usa contentType 'pdf_base64' em vez de 'raw_base64' (ZPL).
+function _enviarPDFParaPrintNode(pdfBase64, titulo) {
+  try {
+    const res = UrlFetchApp.fetch('https://api.printnode.com/printjobs', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        printerId:   PRINTNODE_PRINTER_CARTAO,
+        title:       titulo,
+        contentType: 'pdf_base64',
+        content:     pdfBase64,
+        source:      'GAS-Estoque-Cartao',
+      }),
+      muteHttpExceptions: true,
+      headers: { 'Authorization': 'Basic ' + Utilities.base64Encode(PRINTNODE_API_KEY + ':') },
+    });
+    const code = res.getResponseCode();
+    return code >= 200 && code < 300 ? { ok: true } : { ok: false, mensagem: 'PrintNode HTTP ' + code + ': ' + res.getContentText() };
+  } catch(e) { return { ok: false, mensagem: e.message }; }
+}
+
+function imprimirZPL(op, zpl, impressora) {
+  if (!zpl?.trim()) return { ok:false, mensagem:'Sem ZPL.' };
+  const printerId = (impressora === 'METAL') ? PRINTNODE_PRINTER_M : PRINTNODE_PRINTER_ID;
+  return _printNode(printerId, 'Etiqueta OP '+op, zpl);
+}
+
+function imprimirZPLCadastro(codigo) {
+  try {
+    const sh=_sh(NOME_ABA_CADASTRO);
+    if (!sh) return { ok:false, mensagem:'Aba Cadastro não encontrada.' };
+    const data=sh.getDataRange().getValues(), h=data[0];
+    const iCOD=_idxCol(h,'CÓDIGO'), iZPL=_idxCol(h,'ZPL');
+    if (iCOD<0) return { ok:false, mensagem:'Coluna CÓDIGO não encontrada.' };
+    const linha=data.slice(1).find(r=>String(r[iCOD]||'').trim()===String(codigo).trim());
+    if (!linha) return { ok:false, mensagem:'Código não encontrado.' };
+    const zpl=iZPL>=0?String(linha[iZPL]||'').trim():'';
+    if (!zpl) return { ok:false, mensagem:'ZPL vazio para '+codigo+'.' };
+    return _printNode(PRINTNODE_PRINTER_ID,'Etiqueta Cadastro '+codigo,zpl);
+  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+}
+
+function imprimirZPLCadastroPA(codigo) {
+  try {
+    const sh=_sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return { ok:false, mensagem:'Aba Cadastro_PA não encontrada.' };
+    const data=sh.getDataRange().getValues(), h=data[0];
+    const iCOD=_idxCol(h,'CÓDIGO');
+    if (iCOD<0) return { ok:false, mensagem:'Coluna CÓDIGO não encontrada.' };
+    const linha=data.slice(1).find(r=>String(r[iCOD]||'').trim()===String(codigo).trim());
+    if (!linha) return { ok:false, mensagem:'Código PA '+codigo+' não encontrado.' };
+    const zpl=linha.length>29?String(linha[29]||'').trim():'';
+    if (!zpl) return { ok:false, mensagem:'ZPL vazio para '+codigo+'.' };
+    return _printNode(PRINTNODE_PRINTER_ID,'Etiqueta PA '+codigo,zpl);
+  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+}
+
+// (implementação real logo abaixo, reutilizando Cartao.html e CartaoGrade.html)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  prepararBaixaInsumos — leitura única: Estrutura + Movimento fundidos
+// ════════════════════════════════════════════════════════════════════════════
+function prepararBaixaInsumos(codigoPA, qtdePABaixado) {
+  try {
+    // ── Leitura 1: Estrutura de Produtos ─────────────────────────────────
+    const shEst = _sh(NOME_ABA_ESTRUTURA);
+    if (!shEst) return { ok: false, mensagem: 'Aba "Estrutura de Produtos" não encontrada.' };
+    const dataEst  = shEst.getDataRange().getValues();
+    const headerEst= dataEst[0];
+    const iCodPA   = _idxCol(headerEst, 'CODIGO_PRODUTO');
+    const iCodIns  = _idxCol(headerEst, 'CODIGO_INSUMO');
+    const iDescIns = _idxCol(headerEst, 'DESCRICAO_INSUMO');
+    const iQtdeEst = _idxCol(headerEst, 'QTDE_UTILIZADA');
+    const iOrdem   = _idxCol(headerEst, 'ORDEM');
+    if (iCodPA < 0 || iCodIns < 0 || iQtdeEst < 0)
+      return { ok: false, mensagem: 'Colunas obrigatórias não encontradas na Estrutura de Produtos.' };
+
+    const cod  = String(codigoPA||'').trim().toUpperCase();
+    const qtde = Number(qtdePABaixado) || 1;
+    const itensEst = dataEst.slice(1)
+      .filter(r => String(r[iCodPA]||'').trim().toUpperCase() === cod && String(r[iCodIns]||'').trim())
+      .map(r => ({
+        codigoInsumo:  String(r[iCodIns]  ||'').trim(),
+        descricao:     iDescIns >= 0 ? String(r[iDescIns]||'').trim() : '',
+        qtdeUtilizada: Number(r[iQtdeEst] || 0),
+        ordem:         iOrdem  >= 0 ? String(r[iOrdem]   ||'').trim() : '',
+      }));
+
+    if (!itensEst.length)
+      return { ok: true, itens: [], aviso: `Nenhum insumo cadastrado na Estrutura de Produtos para ${cod}.` };
+
+    // ── Leitura 2: Movimento (saldos) ─────────────────────────────────────
+    const shMov    = _sh(NOME_ABA_MOVIMENTO);
+    if (!shMov) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const dadosMov = shMov.getDataRange().getValues();
+    const saldosMap= _saldosEmMemoria(dadosMov, dadosMov[0]);
+    const saldoFn  = (c) => (saldosMap[c]||[]).reduce((s,e) => s + e.saldo, 0);
+
+    const itens = itensEst.map(item => {
+      const qtdeNecessaria = item.qtdeUtilizada * qtde;
+      const saldoAtual     = saldoFn(item.codigoInsumo);
+      return { ...item, qtdeNecessaria, saldoAtual, suficiente: saldoAtual >= qtdeNecessaria };
+    });
+
+    return { ok: true, itens };
+  } catch(e) { return { ok: false, mensagem: 'Erro ao preparar insumos: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  gravarBaixaInsumos — setValues em bloco (não appendRow por linha)
+//  Recebe: itens = [{ codigoInsumo, descricao, qtdeBaixar }]
+//          dadosBase = { op, usuario, chaveIdem, ... }
+// ════════════════════════════════════════════════════════════════════════════
+function gravarBaixaInsumos(itens, dadosBase) {
+  try {
+    if (!itens?.length) return { ok: true, gravados: 0, avisos: ['Nenhum insumo para baixar.'] };
+
+    const chaveIdem = String(dadosBase.chaveIdem||'').trim();
+    const paraGravar = itens.filter(it => Number(it.qtdeBaixar||0) > 0);
+    if (!paraGravar.length) return { ok: true, gravados: 0, avisos: ['Nenhum item com quantidade > 0.'] };
+
+    const shMov    = _sh(NOME_ABA_MOVIMENTO);
+    if (!shMov) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const dadosSh  = shMov.getDataRange().getValues();
+    const header   = dadosSh[0];
+
+    // Idempotência: se já existe chave gravada, retorna ok sem duplicar
+    if (chaveIdem) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
+        return { ok: true, gravados: 0, jaGravado: true, avisos: [] };
+    }
+
+    const saldosMap = _saldosEmMemoria(dadosSh, header);
+    const saldoDisp = (c) => (saldosMap[c]||[]).reduce((s,e) => s + e.saldo, 0);
+    const mapa      = _mapaStatusCadastro();
+    const agora     = new Date();
+    const avisos    = [];
+    const linhas    = []; // acumula todas as linhas para gravar em um único setValues
+
+    for (const it of paraGravar) {
+      const cod = String(it.codigoInsumo || it.codigo || '').trim();
+      if (!cod) continue;
+      if (mapa[cod] === undefined) { avisos.push(`'${cod}' não cadastrado — pulado.`); continue; }
+      if (mapa[cod] === 'INATIVO')  { avisos.push(`'${cod}' INATIVO — pulado.`); continue; }
+      const saldo = saldoDisp(cod);
+      if (saldo <= 0) { avisos.push(`Sem saldo para '${cod}' — pulado.`); continue; }
+      const qtde = Math.min(Number(it.qtdeBaixar), saldo);
+      if (qtde < Number(it.qtdeBaixar)) avisos.push(`Saldo insuficiente '${cod}': necessário ${it.qtdeBaixar}, disponível ${saldo}.`);
+
+      const enderecos = saldosMap[cod] || [];
+      const dist = _distribuirPorEndereco(enderecos, qtde) || [{ endereco:'', qtde }];
+      for (const { endereco, qtde: q } of dist) {
+        linhas.push(_montarLinhaMovimento(header, {
+          id: Utilities.getUuid().substring(0,8), data: agora,
+          tipo: 'SAIDA', codigo: cod, descricao: it.descricao||'', qtde: q,
+          endereco, op: dadosBase.op||'',
+          obs: `Baixa insumos via PA — OP: ${dadosBase.op||''}`,
+          usuario: dadosBase.usuario||'', computer: dadosBase.computer||'',
+          localizacao: dadosBase.localizacao||'', ip: dadosBase.ip||'',
+          qrcode:'', chave: chaveIdem,
+        }));
+      }
+    }
+
+    if (!linhas.length) return { ok: true, gravados: 0, avisos };
+
+    // Grava tudo em um único setValues — muito mais rápido que appendRow em loop
+    const ultimaLinha = shMov.getLastRow();
+    shMov.getRange(ultimaLinha + 1, 1, linhas.length, header.length).setValues(linhas);
+    SpreadsheetApp.flush();
+
+    return { ok: true, gravados: linhas.length, avisos };
+  } catch(e) { return { ok: false, mensagem: 'Erro ao gravar insumos: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  IMPRESSÃO DE CARTÕES — G (grande) e P (grade A4)
+//  Reutiliza os templates Cartao.html e CartaoGrade.html existentes
+//  lista = [{ codigo, layout }]  onde layout = 'G' ou 'P'
+// ════════════════════════════════════════════════════════════════════════════
+function imprimirFilaCartaoInsumo(lista) {
+  try {
+    if (!lista?.length) return { ok: false, mensagem: 'Lista vazia.' };
+
+    // Monta mapa de produtos
+    const shCad   = _sh(NOME_ABA_CADASTRO);
+    if (!shCad) return { ok: false, mensagem: 'Aba Cadastro não encontrada.' };
+    const data    = shCad.getDataRange().getValues();
+    const header  = data[0];
+    const iCodigo   = _idxCol(header, 'CÓDIGO');
+    const iFoto     = _idxCol(header, 'Endereço_Foto');
+    const iDescricao= _idxCol(header, 'DESCRIÇÃO');
+    const iObs      = _idxCol(header, 'obs');
+    const iEndereco = _idxCol(header, 'Endereço');
+    const mapaProd  = {};
+    data.slice(1).forEach(r => {
+      const cod = String(r[iCodigo] || '').trim();
+      if (!cod) return;
+      mapaProd[cod] = {
+        img:      iFoto      >= 0 ? String(r[iFoto]      || '') : '',
+        detalhe:  iDescricao >= 0 ? String(r[iDescricao] || '') : cod,
+        obs:      iObs       >= 0 ? String(r[iObs]       || '') : '',
+        endereco: iEndereco  >= 0 ? String(r[iEndereco]  || '') : '',
+      };
+    });
+
+    const logoBase64 = _buscarImagemDriveBase64(ID_LOGO_FUTURA);
+    const listaG = [], listaP = [];
+
+    for (const item of lista) {
+      const prod = mapaProd[item.codigo];
+      if (!prod) { Logger.log('Insumo não encontrado: ' + item.codigo); continue; }
+      const dadosFinal = {
+        img:      prod.img ? _buscarImagemDriveBase64(prod.img) : '',
+        logo:     logoBase64,
+        qrcode:   _gerarQRCode('@' + item.codigo),
+        detalhe:  prod.detalhe || item.codigo,
+        enderecos:prod.endereco || '',
+        obs:      prod.obs || '',
+        codigo:   item.codigo,
+      };
+      if (item.layout === 'G') listaG.push(dadosFinal);
+      else                     listaP.push(dadosFinal);
+    }
+
+    if (!listaG.length && !listaP.length)
+      return { ok: false, mensagem: 'Nenhum insumo localizado na planilha.' };
+
+    const erros = [];
+    if (listaG.length > 0) {
+      try {
+        const tmpl = HtmlService.createTemplateFromFile('Cartao');
+        tmpl.lista = listaG;
+        const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        const res  = _enviarPDFParaPrintNode(b64, 'Insumos G (' + listaG.length + ')');
+        if (!res.ok) erros.push('Layout G: ' + res.mensagem);
+      } catch(eG) { erros.push('Layout G: ' + eG.message); }
+    }
+    if (listaP.length > 0) {
+      try {
+        const tmpl = HtmlService.createTemplateFromFile('CartaoGrade');
+        tmpl.lista = listaP;
+        const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        const res  = _enviarPDFParaPrintNode(b64, 'Insumos P (' + listaP.length + ')');
+        if (!res.ok) erros.push('Layout P: ' + res.mensagem);
+      } catch(eP) { erros.push('Layout P: ' + eP.message); }
+    }
+    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
+    return { ok: true, gravados: listaG.length + listaP.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro cartão insumo: ' + e.message }; }
+}
+
+function imprimirFilaCartaoPA(lista) {
+  // Usa os MESMOS templates Cartao.html / CartaoGrade.html do Insumo —
+  // não há diferença de layout entre cartão de Insumo e cartão de PA.
+  try {
+    if (!lista?.length) return { ok: false, mensagem: 'Lista vazia.' };
+
+    const shCad  = _sh(NOME_ABA_CADASTRO_PA);
+    if (!shCad) return { ok: false, mensagem: 'Aba Cadastro_PA não encontrada.' };
+    const data   = shCad.getDataRange().getValues();
+    const header = data[0];
+    const iCodigo   = _idxCol(header, 'CÓDIGO') >= 0 ? _idxCol(header, 'CÓDIGO') : _idxCol(header, 'CODIGO');
+    const iFoto     = _idxCol(header, 'FOTO_SHEETS') >= 0 ? _idxCol(header, 'FOTO_SHEETS') : _idxCol(header, 'Endereço_Foto') >= 0 ? _idxCol(header, 'Endereço_Foto') : 3;
+    const iDesc     = _idxCol(header, 'DESCRIÇÃO') >= 0 ? _idxCol(header, 'DESCRIÇÃO') : _idxCol(header, 'DESCRICAO');
+    const iEndereco = _idxCol(header, 'ENDEREÇO_PA') >= 0 ? _idxCol(header, 'ENDEREÇO_PA') : _idxCol(header, 'Endereço');
+    const iObs      = _idxCol(header, 'obs');
+    const mapaProd  = {};
+    data.slice(1).forEach(r => {
+      const cod = String(r[iCodigo] || '').trim();
+      if (!cod) return;
+      mapaProd[cod] = {
+        img:      iFoto     >= 0 ? String(r[iFoto]     || '').trim() : '',
+        detalhe:  iDesc     >= 0 ? String(r[iDesc]     || '') : cod,
+        endereco: iEndereco >= 0 ? String(r[iEndereco] || '') : '',
+        obs:      iObs      >= 0 ? String(r[iObs]      || '') : '',
+      };
+    });
+
+    const logoBase64 = _buscarImagemDriveBase64(ID_LOGO_FUTURA);
+    const listaG = [], listaP = [];
+
+    for (const item of lista) {
+      const prod = mapaProd[item.codigo];
+      if (!prod) continue;
+      const dadosFinal = {
+        img:      prod.img ? _buscarImagemDriveBase64(prod.img) : '',
+        logo:     logoBase64,
+        qrcode:   _gerarQRCode('@' + item.codigo),
+        detalhe:  prod.detalhe || item.codigo,
+        enderecos:prod.endereco || '',
+        obs:      prod.obs || '',
+        codigo:   item.codigo,
+      };
+      if (item.layout === 'G') listaG.push(dadosFinal);
+      else                     listaP.push(dadosFinal);
+    }
+
+    if (!listaG.length && !listaP.length)
+      return { ok: false, mensagem: 'Nenhum PA localizado na planilha.' };
+
+    const erros = [];
+    if (listaG.length > 0) {
+      try {
+        const tmpl = HtmlService.createTemplateFromFile('Cartao');
+        tmpl.lista = listaG;
+        const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        const res  = _enviarPDFParaPrintNode(b64, 'PA G (' + listaG.length + ')');
+        if (!res.ok) erros.push('Layout G: ' + res.mensagem);
+      } catch(eG) { erros.push('Layout G PA: ' + eG.message); }
+    }
+    if (listaP.length > 0) {
+      try {
+        const tmpl = HtmlService.createTemplateFromFile('CartaoGrade');
+        tmpl.lista = listaP;
+        const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        const res  = _enviarPDFParaPrintNode(b64, 'PA P (' + listaP.length + ')');
+        if (!res.ok) erros.push('Layout P: ' + res.mensagem);
+      } catch(eP) { erros.push('Layout P PA: ' + eP.message); }
+    }
+    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
+    return { ok: true, gravados: listaG.length + listaP.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro cartão PA: ' + e.message }; }
+}
+
+// ── Helpers de impressão ──────────────────────────────────────────────────────
+function _buscarImagemDriveBase64(ref) {
+  try {
+    if (!ref || !String(ref).trim()) return '';
+    let id = String(ref).trim();
+    // Extrai ID do formato thumbnail URL, lh3.googleusercontent.com/d/ID, ou /file/d/ID/view
+    if (id.includes('id=')) {
+      const m = id.match(/id=([\w-]+)/);
+      if (m) id = m[1];
+    } else if (id.includes('/d/')) {
+      const m = id.match(/\/d\/([\w-]+)/);
+      if (m) id = m[1];
+    } else if (id.includes('drive.google.com') || id.includes('googleusercontent.com')) {
+      const m = id.match(/[-\w]{25,}/);
+      if (m) id = m[0];
+    }
+    const blob = DriveApp.getFileById(id).getBlob();
+    const mime = blob.getContentType() || 'image/jpeg';
+    const b64  = Utilities.base64Encode(blob.getBytes());
+    return 'data:' + mime + ';base64,' + b64;
+  } catch(e) {
+    Logger.log('Erro _buscarImagemDriveBase64(' + ref + '): ' + e.message);
+    return '';
+  }
+}
+
+function _gerarQRCode(texto) {
+  try {
+    const url  = 'https://chart.googleapis.com/chart?chs=150x150&cht=qr&chl=' + encodeURIComponent(texto);
+    const blob = UrlFetchApp.fetch(url).getBlob();
+    return 'data:image/png;base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch(e) {
+    Logger.log('Erro _gerarQRCode(' + texto + '): ' + e.message);
+    return '';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  TESTE DIAGNÓSTICO — rode esta função manualmente no editor do Apps Script
+//  (selecione "testeFotoCartao" no dropdown de funções e clique em Executar)
+//  Veja o resultado em Execuções > Ver registros (Logger)
+// ════════════════════════════════════════════════════════════════════════════
+function testeFotoCartao() {
+  const codigoTeste = 'CL2125'; // ajuste se quiser testar outro código
+  const sh = _sh(NOME_ABA_CADASTRO_PA);
+  if (!sh) { Logger.log('Aba Cadastro_PA não encontrada.'); return; }
+  const data   = sh.getDataRange().getValues();
+  const header = data[0];
+  const iCodigo = _idxCol(header, 'CÓDIGO') >= 0 ? _idxCol(header, 'CÓDIGO') : _idxCol(header, 'CODIGO');
+  const iFoto   = _idxCol(header, 'FOTO_SHEETS') >= 0 ? _idxCol(header, 'FOTO_SHEETS') : _idxCol(header, 'Endereço_Foto');
+
+  Logger.log('iCodigo=' + iCodigo + '  iFoto=' + iFoto);
+  Logger.log('Cabeçalho coluna foto: "' + header[iFoto] + '"');
+
+  const linha = data.slice(1).find(r => String(r[iCodigo]||'').trim().toUpperCase() === codigoTeste);
+  if (!linha) { Logger.log('Código ' + codigoTeste + ' não encontrado na aba.'); return; }
+
+  const refFoto = String(linha[iFoto] || '').trim();
+  Logger.log('Valor bruto da coluna foto: "' + refFoto + '"');
+
+  // Testa a extração de ID manualmente
+  let id = refFoto;
+  if (id.includes('id=')) {
+    const m = id.match(/id=([\w-]+)/);
+    if (m) id = m[1];
+  } else if (id.includes('/d/')) {
+    const m = id.match(/\/d\/([\w-]+)/);
+    if (m) id = m[1];
+  }
+  Logger.log('ID extraído: "' + id + '"');
+
+  // Testa o acesso direto ao arquivo
+  try {
+    const file = DriveApp.getFileById(id);
+    Logger.log('Arquivo encontrado! Nome: ' + file.getName());
+    const blob = file.getBlob();
+    Logger.log('MimeType: ' + blob.getContentType() + '  Tamanho: ' + blob.getBytes().length + ' bytes');
+  } catch(e) {
+    Logger.log('ERRO ao acessar arquivo: ' + e.message);
+  }
+
+  // Testa a função real usada no cartão
+  const resultado = _buscarImagemDriveBase64(refFoto);
+  Logger.log('Resultado de _buscarImagemDriveBase64: ' + (resultado ? 'OK, ' + resultado.length + ' caracteres' : 'VAZIO/FALHOU'));
+}
