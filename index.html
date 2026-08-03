@@ -322,6 +322,15 @@
     .op-row-btns-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
     .op-obs-label{font-size:11px;color:#4a6a6a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
     .op-silk-label{font-size:11px;font-weight:700;color:#1a2e2e;white-space:nowrap}
+    /* Tela estreita (celular): encolhe foto/ids e tira obs+silk do aperto,
+       jogando pra linha própria em vez de truncar no meio da palavra */
+    @media (max-width:480px){
+      .op-row-foto{width:64px;min-width:64px}
+      .op-row-ids{width:84px;min-width:84px;padding:8px 6px}
+      .op-row-ids .rf{font-size:10px}
+      .op-row-btns-right{margin-left:0;flex-basis:100%;flex-wrap:wrap}
+      .op-obs-label,.op-silk-label{white-space:normal;overflow:visible;text-overflow:clip;max-width:100%}
+    }
     .btn-silk{height:26px;padding:0 10px;border-radius:4px;font-size:10px;font-weight:700;background:#1a5c5a;color:#fff;border:none;white-space:nowrap;flex-shrink:0;cursor:pointer}
     .btn-silk-metal{background:#4a6a6a}
     .btn-pagar-op{height:26px;padding:0 12px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;flex-shrink:0;cursor:pointer;border:none}
