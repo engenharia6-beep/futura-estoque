@@ -275,6 +275,21 @@
     .ins-qtde-input{width:100%;height:32px;padding:0 6px;background:var(--bg);border:1.5px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-family:var(--mono);text-align:center}
     .ins-qtde-input:disabled{opacity:.35;cursor:not-allowed}
     .ins-qtde-input.insuf{border-color:var(--danger);background:rgba(239,68,68,.08)}
+    /* Tela estreita (celular): nome do item ganha a linha toda em cima;
+       saldo/neces./baixar viram uma segunda linha compacta embaixo —
+       em vez de espremer a descrição numa coluna de ~80px */
+    @media (max-width:480px){
+      .ins-confirm-header,.ins-confirm-row{
+        grid-template-columns:28px 1fr 1fr 1fr;
+        grid-template-areas:"chk nome nome nome" ". saldo neces baixar";
+        row-gap:6px;
+      }
+      .ins-confirm-header>*:nth-child(1),.ins-confirm-row>*:nth-child(1){grid-area:chk}
+      .ins-confirm-header>*:nth-child(2),.ins-confirm-row>*:nth-child(2){grid-area:nome}
+      .ins-confirm-header>*:nth-child(3),.ins-confirm-row>*:nth-child(3){grid-area:saldo;text-align:center}
+      .ins-confirm-header>*:nth-child(4),.ins-confirm-row>*:nth-child(4){grid-area:neces;text-align:center}
+      .ins-confirm-header>*:nth-child(5),.ins-confirm-row>*:nth-child(5){grid-area:baixar}
+    }
     /* Checkbox estilizado */
     .ins-chk{width:18px;height:18px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
     .ins-chk-all-wrap{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)}
