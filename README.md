@@ -145,6 +145,13 @@ deploys no fim deste arquivo.
 - Botões +G / +P direto nos cards, badge de contagem
 - Botões Metal / OP nas OPs com impressoras corretas
 - Impressão ZPL avulsa
+- Cartão (G/Grade A4) mostra "Endereço : Saldo" montado na hora a partir do
+  Cadastro/Cadastro_PA — não imprime mais valor antigo/sujo que estivesse
+  na célula de Endereço
+- Impressora de cartão temporariamente trocada pra uma impressora PDF do
+  PrintNode (Brother "Copiadora 1" com defeito — ver "Assuntos em aberto")
+- Ao mandar imprimir cartão, o PDF também baixa direto no navegador de
+  quem imprimiu, além de (tentar) ir pro PrintNode
 
 ---
 
