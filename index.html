@@ -1790,30 +1790,36 @@ async function abrirModalBOM() {
     const temInsuf = res.itens.some(i => !i.suficiente);
     if (temInsuf) {
       const av = document.getElementById('ins-confirm-aviso');
-      av.textContent = '⚠️ Itens em vermelho estão com saldo insuficiente. Você pode ajustar as quantidades ou confirmar assim mesmo.';
+      av.textContent = '⚠️ Itens com saldo insuficiente estão bloqueados (desmarcados). Só serão baixados os itens com saldo suficiente.';
       av.style.display = 'block';
     }
 
-    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => `
-      <div class="ins-confirm-row ${!it.suficiente?'sem-saldo':''}" id="ins-row-${idx}">
+    document.getElementById('ins-confirm-lista').innerHTML = res.itens.map((it, idx) => {
+      const bloqueado = !it.suficiente;
+      return `
+      <div class="ins-confirm-row ${bloqueado ? 'sem-saldo desmarcado' : ''}" id="ins-row-${idx}">
         <input type="checkbox" class="ins-chk ins-item-chk" id="ins-chk-${idx}"
-          checked data-idx="${idx}" onchange="toggleInsumoRow(${idx}, this.checked)">
+          ${bloqueado ? '' : 'checked'} ${bloqueado ? 'disabled' : ''} data-idx="${idx}"
+          onchange="toggleInsumoRow(${idx}, this.checked)">
         <div class="ins-confirm-nome">
           <div class="ins-confirm-codigo">${esc(it.codigo)} <span class="badge ${it.tipoMov==='PA'?'badge-pa':'badge-insumo'}">${esc(it.tipoMov||'INS')}</span></div>
           <div>${esc(it.descricao)}</div>
           ${(()=>{const _e=(it.tipoMov==='PA'?paCache:insumoCache).find(x=>x.codigo===it.codigo)?.endereco;return _e?`<div style="font-size:11px;color:var(--accent);font-family:var(--mono)">📍 ${esc(_e)}</div>`:''})()}
+          ${bloqueado ? `<div style="font-size:10px;color:var(--danger);margin-top:2px">Saldo insuficiente — bloqueado</div>` : ''}
         </div>
-        <div class="ins-saldo">${it.saldoAtual}</div>
+        <div class="ins-saldo" style="${bloqueado ? 'color:var(--danger);font-weight:700' : ''}">${it.saldoAtual}</div>
         <div style="text-align:center;font-size:12px;font-family:var(--mono)">${it.qtdBaixar}</div>
-        <input class="ins-qtde-input ${!it.suficiente?'insuf':''}"
-          id="ins-qtde-${idx}" type="number" min="0" step="0.01"
-          value="${it.qtdBaixar}"
+        <input class="ins-qtde-input ${bloqueado ? 'insuf' : ''}"
+          id="ins-qtde-${idx}" type="number" min="0" step="0.01" max="${it.saldoAtual}"
+          value="${bloqueado ? 0 : it.qtdBaixar}"
+          ${bloqueado ? 'disabled' : ''}
           data-codigo="${esc(it.codigo)}"
           data-descricao="${esc(it.descricao)}"
           data-tipomov="${esc(it.tipoMov||'INSUMO')}"
           data-saldo="${it.saldoAtual}"
           oninput="validarQtdeInsumo(this, ${it.saldoAtual})">
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     atualizarContadorInsumos();
   } catch(e) {
@@ -2098,8 +2104,9 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
 }
 
 function validarQtdeInsumo(input, saldoAtual) {
-  const val = parseFloat(input.value || 0);
-  input.classList.toggle('insuf', val > saldoAtual);
+  let val = parseFloat(input.value || 0);
+  if (val > saldoAtual) { val = saldoAtual; input.value = saldoAtual; }
+  input.classList.toggle('insuf', false);
   atualizarContadorInsumos();
 }
 
