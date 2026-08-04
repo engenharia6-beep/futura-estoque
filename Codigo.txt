@@ -28,7 +28,7 @@ const NOME_ABA_ESTRUTURA    = 'Estrutura de Produtos'; // ← nova aba
 const PRINTNODE_API_KEY        = 'ZYS0tKo625xsi8K72T2OcfuzQ4ChLpR6ulS7qEPry0U';
 const PRINTNODE_PRINTER_ID     = 75307272;
 const PRINTNODE_PRINTER_M      = 75307276;
-const PRINTNODE_PRINTER_CARTAO = 75494109;
+const PRINTNODE_PRINTER_CARTAO = 75307275; // temporário: Brother DCP-B7535DW (75494109) com defeito — imprimindo em PDF
 const ID_LOGO_FUTURA           = '15XkD0B12QluNVLcbeB_d7SGbQpzvtVYs';
 
 const _NUM_CAMPOS = ['estoqueInicial','estoqueMin','estoqueSeg','pontoPedido','precoUSD','precoBRL','peso'];

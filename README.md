@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @28 | Frontend: `b0e2198`+**
+**GAS ativo: @29 | Frontend: `b0e2198`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -227,6 +227,11 @@ código.
 - **Pasta temp `gas-futura`** — sincronizada com `futura-estoque-gas` em
   2026-08-04, mas por estar em `AppData\Local\Temp` pode ser recriada
   desatualizada por uma sessão futura. O ideal é parar de usá-la.
+- **Impressora de cartão temporariamente trocada (2026-08-04)** — a Brother
+  DCP-B7535DW ("Copiadora 1", PrintNode `75494109`) está com defeito.
+  `PRINTNODE_PRINTER_CARTAO` aponta hoje para `75307275` (impressão em PDF).
+  Quando a Brother for consertada, reverter essa constante em `Código.js`
+  para `75494109` e publicar um novo deploy.
 
 ---
 
@@ -248,4 +253,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @25 | ⚠️ **REGREDIU @20-@24** — publicada a partir de uma cópia local desatualizada; perdeu o bloqueio de OP duplicada e voltou a baixar insumo em dobro no Triangular. Corrigida em minutos pela @26. Motivo pelo qual a regra de verificação pré-deploy acima existe. |
 | @26 | restaura as proteções @20-@24 (bloqueio de OP duplicada, sem baixa dupla no Triangular) + mantém perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
 | @27 | feat: endereço único por item, lido direto do Cadastro/Cadastro_PA; remove distribuição por endereço em Movimento; mudarEndereco/PA viram edição simples de cadastro |
-| @28 | ✅ **ATIVO** — feat: obterResumoDashboard, resumo leve do dashboard (só contagens, sem enviar itens completos) |
+| @28 | feat: obterResumoDashboard, resumo leve do dashboard (só contagens, sem enviar itens completos) |
+| @29 | ✅ **ATIVO** — fix: troca temporária da impressora de cartão (PrintNode `75494109` → `75307275`) — Brother DCP-B7535DW com defeito, imprimindo em PDF por enquanto |
