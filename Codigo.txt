@@ -1839,6 +1839,7 @@ function imprimirFilaCartaoInsumo(lista) {
     const iDescricao= _idxCol(header, 'DESCRIÇÃO');
     const iObs      = _idxCol(header, 'obs');
     const iEndereco = _idxCol(header, 'Endereço');
+    const iEstAtual = _idxCol(header, 'ESTOQUE_ATUAL');
     const mapaProd  = {};
     data.slice(1).forEach(r => {
       const cod = String(r[iCodigo] || '').trim();
@@ -1848,6 +1849,7 @@ function imprimirFilaCartaoInsumo(lista) {
         detalhe:  iDescricao >= 0 ? String(r[iDescricao] || '') : cod,
         obs:      iObs       >= 0 ? String(r[iObs]       || '') : '',
         endereco: iEndereco  >= 0 ? String(r[iEndereco]  || '') : '',
+        saldo:    iEstAtual  >= 0 ? Number(r[iEstAtual]   || 0) : 0,
       };
     });
 
@@ -1862,7 +1864,7 @@ function imprimirFilaCartaoInsumo(lista) {
         logo:     logoBase64,
         qrcode:   _gerarQRCode('@' + item.codigo),
         detalhe:  prod.detalhe || item.codigo,
-        enderecos:prod.endereco || '',
+        enderecos:(prod.endereco || '—') + ' : ' + prod.saldo,
         obs:      prod.obs || '',
         codigo:   item.codigo,
       };
@@ -1917,6 +1919,7 @@ function imprimirFilaCartaoPA(lista) {
     const iDesc     = _idxCol(header, 'DESCRIÇÃO') >= 0 ? _idxCol(header, 'DESCRIÇÃO') : _idxCol(header, 'DESCRICAO');
     const iEndereco = _idxCol(header, 'ENDEREÇO_PA') >= 0 ? _idxCol(header, 'ENDEREÇO_PA') : _idxCol(header, 'Endereço');
     const iObs      = _idxCol(header, 'obs');
+    const iEstAtual = _idxCol(header, 'ESTOQUE_ATUAL');
     const mapaProd  = {};
     data.slice(1).forEach(r => {
       const cod = String(r[iCodigo] || '').trim();
@@ -1926,6 +1929,7 @@ function imprimirFilaCartaoPA(lista) {
         detalhe:  iDesc     >= 0 ? String(r[iDesc]     || '') : cod,
         endereco: iEndereco >= 0 ? String(r[iEndereco] || '') : '',
         obs:      iObs      >= 0 ? String(r[iObs]      || '') : '',
+        saldo:    iEstAtual >= 0 ? Number(r[iEstAtual]  || 0) : 0,
       };
     });
 
@@ -1940,7 +1944,7 @@ function imprimirFilaCartaoPA(lista) {
         logo:     logoBase64,
         qrcode:   _gerarQRCode('@' + item.codigo),
         detalhe:  prod.detalhe || item.codigo,
-        enderecos:prod.endereco || '',
+        enderecos:(prod.endereco || '—') + ' : ' + prod.saldo,
         obs:      prod.obs || '',
         codigo:   item.codigo,
       };

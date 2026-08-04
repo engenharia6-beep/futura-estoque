@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @30 | Frontend: `8b559b0`+**
+**GAS ativo: @31 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -262,4 +262,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @27 | feat: endereço único por item, lido direto do Cadastro/Cadastro_PA; remove distribuição por endereço em Movimento; mudarEndereco/PA viram edição simples de cadastro |
 | @28 | feat: obterResumoDashboard, resumo leve do dashboard (só contagens, sem enviar itens completos) |
 | @29 | fix: troca temporária da impressora de cartão (PrintNode `75494109` → `75307275`) — Brother DCP-B7535DW com defeito, imprimindo em PDF por enquanto |
-| @30 | ✅ **ATIVO** — feat: imprimirFilaCartao(Insumo/PA) devolve o PDF em base64 pro frontend baixar localmente, além de tentar mandar pro PrintNode |
+| @30 | feat: imprimirFilaCartao(Insumo/PA) devolve o PDF em base64 pro frontend baixar localmente, além de tentar mandar pro PrintNode |
+| @31 | ✅ **ATIVO** — fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
