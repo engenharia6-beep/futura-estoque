@@ -1874,11 +1874,15 @@ function imprimirFilaCartaoInsumo(lista) {
       return { ok: false, mensagem: 'Nenhum insumo localizado na planilha.' };
 
     const erros = [];
+    const pdfs  = []; // PDF gerado é sempre devolvido pro frontend baixar/abrir
+                       // localmente, independente do resultado do PrintNode
+                       // (útil enquanto a impressora física está com defeito)
     if (listaG.length > 0) {
       try {
         const tmpl = HtmlService.createTemplateFromFile('Cartao');
         tmpl.lista = listaG;
         const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        pdfs.push({ nome: 'Insumos_G_' + listaG.length + '.pdf', base64: b64 });
         const res  = _enviarPDFParaPrintNode(b64, 'Insumos G (' + listaG.length + ')');
         if (!res.ok) erros.push('Layout G: ' + res.mensagem);
       } catch(eG) { erros.push('Layout G: ' + eG.message); }
@@ -1888,12 +1892,13 @@ function imprimirFilaCartaoInsumo(lista) {
         const tmpl = HtmlService.createTemplateFromFile('CartaoGrade');
         tmpl.lista = listaP;
         const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        pdfs.push({ nome: 'Insumos_P_' + listaP.length + '.pdf', base64: b64 });
         const res  = _enviarPDFParaPrintNode(b64, 'Insumos P (' + listaP.length + ')');
         if (!res.ok) erros.push('Layout P: ' + res.mensagem);
       } catch(eP) { erros.push('Layout P: ' + eP.message); }
     }
-    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
-    return { ok: true, gravados: listaG.length + listaP.length };
+    if (erros.length) return { ok: false, mensagem: erros.join('\n'), pdfs };
+    return { ok: true, gravados: listaG.length + listaP.length, pdfs };
   } catch(e) { return { ok: false, mensagem: 'Erro cartão insumo: ' + e.message }; }
 }
 
@@ -1947,11 +1952,15 @@ function imprimirFilaCartaoPA(lista) {
       return { ok: false, mensagem: 'Nenhum PA localizado na planilha.' };
 
     const erros = [];
+    const pdfs  = []; // PDF gerado é sempre devolvido pro frontend baixar/abrir
+                       // localmente, independente do resultado do PrintNode
+                       // (útil enquanto a impressora física está com defeito)
     if (listaG.length > 0) {
       try {
         const tmpl = HtmlService.createTemplateFromFile('Cartao');
         tmpl.lista = listaG;
         const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        pdfs.push({ nome: 'PA_G_' + listaG.length + '.pdf', base64: b64 });
         const res  = _enviarPDFParaPrintNode(b64, 'PA G (' + listaG.length + ')');
         if (!res.ok) erros.push('Layout G: ' + res.mensagem);
       } catch(eG) { erros.push('Layout G PA: ' + eG.message); }
@@ -1961,12 +1970,13 @@ function imprimirFilaCartaoPA(lista) {
         const tmpl = HtmlService.createTemplateFromFile('CartaoGrade');
         tmpl.lista = listaP;
         const b64  = Utilities.base64Encode(tmpl.evaluate().getBlob().getAs(MimeType.PDF).getBytes());
+        pdfs.push({ nome: 'PA_P_' + listaP.length + '.pdf', base64: b64 });
         const res  = _enviarPDFParaPrintNode(b64, 'PA P (' + listaP.length + ')');
         if (!res.ok) erros.push('Layout P: ' + res.mensagem);
       } catch(eP) { erros.push('Layout P PA: ' + eP.message); }
     }
-    if (erros.length) return { ok: false, mensagem: erros.join('\n') };
-    return { ok: true, gravados: listaG.length + listaP.length };
+    if (erros.length) return { ok: false, mensagem: erros.join('\n'), pdfs };
+    return { ok: true, gravados: listaG.length + listaP.length, pdfs };
   } catch(e) { return { ok: false, mensagem: 'Erro cartão PA: ' + e.message }; }
 }
 

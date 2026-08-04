@@ -2393,6 +2393,23 @@ function limparFila() {
   toast('Fila limpa');
 }
 
+// Converte o PDF em base64 (vindo do backend) num download local no
+// computador/celular de quem está imprimindo — não depende de nada além
+// do navegador, então funciona mesmo que o envio ao PrintNode falhe.
+function _baixarPDFBase64(base64, nomeArquivo) {
+  try {
+    const bin   = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = nomeArquivo || 'cartoes.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch(e) { console.error('Erro ao baixar PDF:', e); }
+}
+
 async function imprimirFila(layout) {
   const itens = _filaImpressao.filter(i => i.layout === layout);
   if (!itens.length) { toast(`Nenhum item na fila para layout ${layout}`, 'warn'); return; }
@@ -2402,7 +2419,7 @@ async function imprimirFila(layout) {
 
   const barra = document.getElementById('fila-bar');
   barra.style.opacity = '.6';
-  toast(`⏳ Enviando ${itens.length} cartão(ns) para impressão...`, 'ok', 8000);
+  toast(`⏳ Gerando ${itens.length} cartão(ns)...`, 'ok', 8000);
 
   const promessas = [];
   if (insItens.length) promessas.push(api('imprimirFilaCartaoInsumo', { lista: insItens }));
@@ -2414,8 +2431,16 @@ async function imprimirFila(layout) {
       .filter(r => r.status === 'rejected' || !r.value?.ok)
       .map(r => r.reason?.message || r.value?.mensagem || 'Erro desconhecido');
 
+    // Baixa os PDFs gerados no navegador — independe de o envio ao
+    // PrintNode ter dado certo (o PDF já foi gerado de qualquer jeito)
+    let pdfsBaixados = 0;
+    resultados.forEach(r => {
+      (r.value?.pdfs || []).forEach(pdf => { _baixarPDFBase64(pdf.base64, pdf.nome); pdfsBaixados++; });
+    });
+
     if (erros.length) {
-      toast('⚠️ ' + erros.join(' | '), 'err', 6000);
+      const sufixo = pdfsBaixados ? ` (${pdfsBaixados} PDF(s) baixado(s) mesmo assim)` : '';
+      toast('⚠️ ' + erros.join(' | ') + sufixo, 'err', 7000);
     } else {
       // Remove os impressos da fila e zera os badges correspondentes
       const codigosLayout = new Set(itens.map(i => i.codigo + '|' + i.layout));
@@ -2425,7 +2450,8 @@ async function imprimirFila(layout) {
         _atualizarBadgeCard(codigo, layout);
       });
       _atualizarBarraFila();
-      toast(`✔ ${itens.length} cartão(ns) enviado(s) para impressão!`);
+      const pdfMsg = pdfsBaixados ? ` — ${pdfsBaixados} PDF(s) baixado(s)` : '';
+      toast(`✔ ${itens.length} cartão(ns) enviado(s) para impressão!${pdfMsg}`);
     }
   } catch(e) {
     toast('Erro ao imprimir: ' + e.message, 'err');
