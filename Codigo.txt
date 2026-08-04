@@ -253,7 +253,7 @@ function doPost(e) {
       // ── OPs ───────────────────────────────────────────────────────────────
       'listarOPS':              () => listarOPS(),
       'prepararBOM':            () => prepararEListarBOM(dados.op),
-      'prepararBOMComSaldo':    () => prepararBOMComSaldo(dados.op),
+      'prepararBOMComSaldo':    () => prepararBOMComSaldo(dados),
       'baixarBOMComTipo':       () => baixarBOMComTipo(dados.movimentos, dados.dadosBase),
 
       // ── Triangular (nova versão com baixa de insumos) ─────────────────────
@@ -352,10 +352,8 @@ function _baixarInsumosDaEstrutura(codigoPA, qtdePABaixado, dadosBase) {
       return resultado;
     }
 
-    const saldosInsumo = _saldosEmMemoria(
-      _sh(NOME_ABA_MOVIMENTO).getDataRange().getValues(),
-      _sh(NOME_ABA_MOVIMENTO).getRange(1, 1, 1, _sh(NOME_ABA_MOVIMENTO).getLastColumn()).getValues()[0]
-    );
+    const _dadosMov   = _sh(NOME_ABA_MOVIMENTO).getDataRange().getValues();
+    const saldosInsumo = _saldosEmMemoria(_dadosMov, _dadosMov[0]);
     const saldoTotal = (cod) => (saldosInsumo[cod] || []).reduce((s, e) => s + e.saldo, 0);
 
     const paraGravar = [];
@@ -754,11 +752,11 @@ function obterSaldo(codigo) {
   } catch(e) { return 0; }
 }
 
-function obterEnderecosSaldo(codigo) {
+function obterEnderecosSaldo(codigo, preData) {
   try {
     const sh   = _sh(NOME_ABA_MOVIMENTO);
     if (!sh) return { saldo: 0, enderecos: [] };
-    const data = sh.getDataRange().getValues();
+    const data = preData || sh.getDataRange().getValues();
     const h    = data[0];
     const idxN = {};
     h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
@@ -793,14 +791,22 @@ function gravarMovimento(dados) {
     if (mapa[codigo] === 'INATIVO')  return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
     const sh = _sh(NOME_ABA_MOVIMENTO);
     if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
-    const header      = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    const linhasAntes = sh.getLastRow();
+    const dadosSh     = sh.getDataRange().getValues();
+    const header      = dadosSh[0];
+    const linhasAntes = dadosSh.length;
+    // Idempotência: rejeita gravação duplicada se a chave já existe
+    const chaveAtual = String(dados.chave || dados.chaveIdem || '').trim();
+    if (chaveAtual) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === chaveAtual))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
     const isSaida     = String(dados.tipo||'').toUpperCase() === 'SAIDA';
     const qtde        = Number(dados.qtde || 0);
     const agora       = new Date();
     const ids         = [];
     if (isSaida) {
-      const { saldo: saldoTotal, enderecos } = obterEnderecosSaldo(codigo);
+      const { saldo: saldoTotal, enderecos } = obterEnderecosSaldo(codigo, dadosSh);
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
       const dist = _distribuirPorEndereco(enderecos, qtde);
       if (!dist) return { ok: false, mensagem: `Não foi possível distribuir o saldo.` };
@@ -826,6 +832,33 @@ function gravarMovimentosEmLote(movimentos) {
     const dadosSh    = sh.getDataRange().getValues();
     const header     = dadosSh[0];
     const linhasAntes = dadosSh.length;
+    // Idempotência: usa a chave do primeiro movimento (todos compartilham a mesma)
+    const primeiraChave = String(movimentos[0]?.chave || '').trim();
+    if (primeiraChave) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === primeiraChave))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    // Checa duplicidade de negócio — mesma OP real (não ADJ- manual) já baixada para os mesmos códigos
+    const opLote = String(movimentos[0]?.op || '').trim();
+    if (opLote && !/^ADJ-/i.test(opLote)) {
+      const iOPcol  = _idxCol(header, 'op');
+      const iCodCol = _idxCol(header, 'codigo');
+      const iTipoCol= _idxCol(header, 'tipo');
+      if (iOPcol >= 0 && iCodCol >= 0 && iTipoCol >= 0) {
+        const codigosSaida = movimentos.filter(m => String(m.tipo||'').toUpperCase()==='SAIDA').map(m => String(m.codigo||'').trim());
+        const jaBaixado = codigosSaida.length > 0 && codigosSaida.every(cod =>
+          dadosSh.slice(1).some(r =>
+            String(r[iOPcol]||'').trim()  === opLote &&
+            String(r[iCodCol]||'').trim() === cod &&
+            String(r[iTipoCol]||'').trim().toUpperCase() === 'SAIDA'
+          )
+        );
+        if (jaBaixado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
     const saldosMap  = _saldosEmMemoria(dadosSh, header);
     const saldoTotal = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
     const mapa = _mapaStatusCadastro();
@@ -975,6 +1008,23 @@ function gravarMovimentoPA(dados) {
         return { ok: true, gravados: 0, jaGravado: true };
     }
 
+    // Checa duplicidade de negócio — mesma OP real (não ADJ- manual) + código já baixados
+    // Protege contra reabrir e confirmar a baixa da mesma OP duas vezes (chaveIdem muda a cada clique)
+    const opStr = String(dados.op||'').trim();
+    if (isSaida && opStr && !/^ADJ-/i.test(opStr)) {
+      const iOPcol  = _idxCol(headerPA, 'op');
+      const iCodCol = _idxCol(headerPA, 'codigo');
+      const iTipoCol= _idxCol(headerPA, 'tipo');
+      if (iOPcol >= 0 && iCodCol >= 0 && iTipoCol >= 0) {
+        const jaBaixado = dadosPA.slice(1).some(r =>
+          String(r[iOPcol]||'').trim() === opStr &&
+          String(r[iCodCol]||'').trim() === codigo &&
+          String(r[iTipoCol]||'').trim().toUpperCase() === 'SAIDA'
+        );
+        if (jaBaixado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
     const saldosPA   = _saldosEmMemoria(dadosPA, headerPA);
     const linhasAntes= dadosPA.length;
     const agora      = new Date();
@@ -1019,6 +1069,33 @@ function gravarMovimentosEmLotePA(movimentos) {
     const dadosSh     = sh.getDataRange().getValues();
     const header      = dadosSh[0];
     const linhasAntes = dadosSh.length;
+    // Idempotência: usa a chave do primeiro movimento (todos compartilham a mesma)
+    const primeiraChave = String(movimentos[0]?.chave || '').trim();
+    if (primeiraChave) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === primeiraChave))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    // Checa duplicidade de negócio — mesma OP real (não ADJ- manual) já baixada para os mesmos códigos
+    const opLote = String(movimentos[0]?.op || '').trim();
+    if (opLote && !/^ADJ-/i.test(opLote)) {
+      const iOPcol  = _idxCol(header, 'op');
+      const iCodCol = _idxCol(header, 'codigo');
+      const iTipoCol= _idxCol(header, 'tipo');
+      if (iOPcol >= 0 && iCodCol >= 0 && iTipoCol >= 0) {
+        const codigosSaida = movimentos.filter(m => String(m.tipo||'').toUpperCase()==='SAIDA').map(m => String(m.codigo||'').trim());
+        const jaBaixado = codigosSaida.length > 0 && codigosSaida.every(cod =>
+          dadosSh.slice(1).some(r =>
+            String(r[iOPcol]||'').trim()  === opLote &&
+            String(r[iCodCol]||'').trim() === cod &&
+            String(r[iTipoCol]||'').trim().toUpperCase() === 'SAIDA'
+          )
+        );
+        if (jaBaixado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
     const saldosMap   = _saldosEmMemoria(dadosSh, header);
     const saldoTotal  = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
     const mapa = _mapaStatusCadastroPA();
@@ -1037,7 +1114,7 @@ function gravarMovimentosEmLotePA(movimentos) {
     const linhas = [];
     for (const mov of movimentos) {
       const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
-      const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', obs: mov.obs||'', usuario: mov.usuario||'', computer: mov.computer||'', localizacao: mov.localizacao||'', ip: mov.ip||'' };
+      const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', computer: mov.computer||'', localizacao: mov.localizacao||'', ip: mov.ip||'' };
       if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
         const dist = _distribuirPorEndereco(saldosMap[cod]||[], qtde) || [{ endereco: mov.endereco||'', qtde }];
         for (const { endereco, qtde: q } of dist) {
@@ -1069,6 +1146,7 @@ function pagarOPTriangularPA(dados) {
     const computer   = dados.computer   || '';
     const localizacao= dados.localizacao|| '';
     const ip         = dados.ip         || '';
+    const chaveIdem  = String(dados.chaveIdem || '').trim();
 
     if (!codOrigem)  return { ok: false, mensagem: 'Código de origem não informado.' };
     if (!codDestino) return { ok: false, mensagem: 'Código de destino não informado.' };
@@ -1081,8 +1159,39 @@ function pagarOPTriangularPA(dados) {
     if (mapa[codDestino] === undefined) return { ok: false, mensagem: `PA destino '${codDestino}' não cadastrado.` };
     if (mapa[codDestino] === 'INATIVO')  return { ok: false, mensagem: `PA destino '${codDestino}' INATIVO.` };
 
-    const saldoOrigem = obterSaldoPA(codOrigem);
+    const sh = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+
+    // ── Leitura ÚNICA de Movimento_PA: saldo + idempotência + header ─────
+    const dadosSh     = sh.getDataRange().getValues();
+    const header      = dadosSh[0];
+    const linhasAntes = dadosSh.length;
+    const saldoMapa   = _saldosEmMemoria(dadosSh, header);
+    // Inclui estoque inicial para manter paridade com obterSaldoPA()
+    const estoqueIni  = _estoqueInicialPA(codOrigem);
+    const saldoOrigem = estoqueIni + (saldoMapa[codOrigem]||[]).reduce((s,e)=>s+e.saldo,0);
     if (qtde > saldoOrigem) return { ok: false, mensagem: `Saldo insuficiente para ${codOrigem}. Disponível: ${saldoOrigem}.` };
+
+    if (chaveIdem) {
+      const iChkIdx = header.findIndex(v => _norm(v) === 'chave');
+      if (iChkIdx >= 0 && dadosSh.slice(1).some(r => String(r[iChkIdx]||'').trim() === chaveIdem))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    // Checa duplicidade de negócio — mesma OP real (não ADJ- manual) já baixada para o código origem
+    if (op && !/^ADJ-/i.test(op)) {
+      const iOPcol  = _idxCol(header, 'op');
+      const iCodCol = _idxCol(header, 'codigo');
+      const iTipoCol= _idxCol(header, 'tipo');
+      if (iOPcol >= 0 && iCodCol >= 0 && iTipoCol >= 0) {
+        const jaBaixado = dadosSh.slice(1).some(r =>
+          String(r[iOPcol]||'').trim()  === op &&
+          String(r[iCodCol]||'').trim() === codOrigem &&
+          String(r[iTipoCol]||'').trim().toUpperCase() === 'SAIDA'
+        );
+        if (jaBaixado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
 
     // Busca descrições e endereços
     const shCad   = _sh(NOME_ABA_CADASTRO_PA);
@@ -1099,26 +1208,22 @@ function pagarOPTriangularPA(dados) {
     const endOri  = (rowOri && iEndCad  >= 0) ? String(rowOri[iEndCad] ||'') : '';
     const endDes  = (rowDes && iEndCad  >= 0) ? String(rowDes[iEndCad] ||'') : '';
 
-    const sh     = _sh(NOME_ABA_MOVIMENTO_PA);
-    if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
-    const header = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
     const agora  = new Date();
-    const base   = { qtde, op, usuario, computer, localizacao, ip, qrcode: '' };
+    const base   = { qtde, op, usuario, computer, localizacao, ip, qrcode: '', chave: chaveIdem };
 
-    // Grava os 3 movimentos triangulares
+    // Grava os 3 movimentos triangulares em uma operação setValues
     const linhas = [
       _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'SAIDA',   codigo: codOrigem,  descricao: descOri, endereco: endOri, obs: `Triangular SAIDA VIA OP: ${op} PARA: ${codDestino}` })),
       _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'ENTRADA', codigo: codDestino, descricao: descDes, endereco: endDes, obs: `Triangular ENTRADA VIA OP: ${op} DE: ${codOrigem}` })),
       _montarLinhaMovimento(header, Object.assign({}, base, { id: Utilities.getUuid().substring(0,8), data: agora, tipo: 'SAIDA',   codigo: codDestino, descricao: descDes, endereco: endDes, obs: `Triangular SAIDA VIA OP: ${op}` })),
     ];
-    linhas.forEach(l => sh.appendRow(l)); // 3 linhas apenas — ok
+    sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
     SpreadsheetApp.flush();
 
-    // ── Baixa automática dos insumos do produto DESTINO ───────────────────
-    // (é o destino que sai — consome os insumos de embalagem)
-    const insumos = _baixarInsumosDaEstrutura(codDestino, qtde, { op, usuario, computer, localizacao, ip });
-
-    return { ok: true, gravados: 3, insumos };
+    // Baixa dos insumos do produto DESTINO NÃO é feita aqui — o frontend controla,
+    // via modal de confirmação de insumos (mesmo padrão de gravarMovimentoPA).
+    // Antes havia baixa automática aqui + baixa manual pelo modal, duplicando os insumos.
+    return { ok: true, gravados: 3 };
   } catch(e) { return { ok: false, mensagem: 'Erro Triangular: ' + e.message }; }
 }
 
@@ -1225,41 +1330,124 @@ function listarOPS() {
 // ════════════════════════════════════════════════════════════════════════════
 //  BOM
 // ════════════════════════════════════════════════════════════════════════════
-function prepararEListarBOM(opNumero) {
+function prepararEListarBOM(opNumero, dadosOPC) {
+  // dadosOPC = { codigoPA, qtde } — quando passados pelo frontend, dispensa ler a aba OPS
   try {
-    const shBom = _sh(NOME_ABA_BOM);
-    if (!shBom) return { ok: false, mensagem: 'Aba BOM não encontrada.' };
-    shBom.getRange('A2').setValue(String(opNumero).trim());
-    SpreadsheetApp.flush();
+    let codigoPA, qtdePedido;
 
-    // As colunas QTDE_BOM/SALDO dependem de fórmulas que recalculam após o
-    // flush. Em vez de um sleep fixo de 3s (sempre pago, mesmo quando a
-    // planilha já recalculou em 300ms), faz polling curto e sai assim que
-    // duas leituras seguidas derem o mesmo resultado — mesmo teto de espera
-    // (10×300ms=3s) do sleep antigo, mas normalmente sai bem antes.
-    let data = shBom.getDataRange().getValues();
-    for (let tentativa = 0; tentativa < 10; tentativa++) {
-      Utilities.sleep(300);
-      const proxima = shBom.getDataRange().getValues();
-      if (JSON.stringify(proxima) === JSON.stringify(data)) { data = proxima; break; }
-      data = proxima;
+    if (dadosOPC?.codigoPA && Number(dadosOPC?.qtde) > 0) {
+      // ── Fast path: produto e quantidade já vieram do frontend ────────────
+      codigoPA   = String(dadosOPC.codigoPA).trim();
+      qtdePedido = Number(dadosOPC.qtde);
+    } else {
+      // ── Fallback: busca na aba OPS ───────────────────────────────────────
+      const shOPS = _sh(NOME_ABA_OPS);
+      if (!shOPS) return { ok: false, mensagem: 'Aba OPS não encontrada.' };
+      const dataOPS = shOPS.getDataRange().getValues();
+      const hOPS    = dataOPS[0];
+      const idxOPS  = {};
+      hOPS.forEach((v,i) => { idxOPS[String(v||'').trim().toUpperCase()] = i; });
+      const iOP     = idxOPS['OP']     ?? idxOPS['N_OP']      ?? -1;
+      const iCodigo = idxOPS['CODIGO'] ?? idxOPS['CÓDIGO']    ?? -1;
+      const iQtde   = idxOPS['QTDE']   ?? idxOPS['QUANTIDADE'] ?? -1;
+      const opStr   = String(opNumero).trim();
+      const rowOP   = dataOPS.slice(1).find(r => String(r[iOP]||'').trim() === opStr
+                                               || String(r[iOP]||'').trim() === String(Number(opStr)));
+      if (!rowOP) return { ok: false, mensagem: `OP ${opStr} não encontrada na planilha OPS.` };
+      codigoPA   = iCodigo >= 0 ? String(rowOP[iCodigo]||'').trim() : '';
+      qtdePedido = iQtde   >= 0 ? Number(rowOP[iQtde]  ||0) : 0;
+      if (!codigoPA) return { ok: false, mensagem: 'Código do produto não encontrado na OP.' };
     }
-    if (data.length < 2) return { ok: true, itens: [] };
-    const header = data[0];
-    const idx    = {}, idxN = {};
-    header.forEach((v,i) => { idx[String(v).trim().toUpperCase()]=i; const k=_norm(v); if(!idxN[k]) idxN[k]=i; });
-    const iOrdem   = idx['ORDEM']??0, iCodigo=idx['CODIGO']??1, iDesc=idx['DESCRICAO']??2;
-    const iOP      = idx['OP']??3, iBom=idx['QTDE_BOM']??idx['QTD_BOM']??5;
-    const iPedido  = idx['QTDE_PEDIDO']??idx['QTD_PEDIDO']??6, iSaldo=idx['SALDO']??7;
-    const iTipoMov = idxN['tipomov']??idxN['tipo mov']??idx['TIPO_MOV']??-1;
-    const op=String(opNumero).trim(), opNorm=op.replace(/[^0-9a-zA-Z]/g,'').toLowerCase();
-    const itens = data.slice(1)
-      .filter(r => { const opPlan=String(r[iOP]||'').trim(); return (opPlan===op||opPlan.replace(/[^0-9a-zA-Z]/g,'').toLowerCase()===opNorm) && String(r[iCodigo]||'').trim()!==''; })
+
+    // ── Leitura 2: Estrutura de Produtos ─────────────────────────────────
+    const shEst  = _sh(NOME_ABA_ESTRUTURA);
+    if (!shEst) return { ok: false, mensagem: 'Aba "Estrutura de Produtos" não encontrada.' };
+    const dataEst  = shEst.getDataRange().getValues();
+    const hEst     = dataEst[0];
+    const iCodPA   = _idxCol(hEst, 'CODIGO_PRODUTO');
+    const iCodIns  = _idxCol(hEst, 'CODIGO_INSUMO');
+    const iDescIns = _idxCol(hEst, 'DESCRICAO_INSUMO');
+    const iQtdeEst = _idxCol(hEst, 'QTDE_UTILIZADA');
+    const iOrdem   = _idxCol(hEst, 'ORDEM');
+    const iTipoMov = _idxCol(hEst, 'TIPO_MOV'); // coluna opcional na estrutura
+    if (iCodPA < 0 || iCodIns < 0 || iQtdeEst < 0)
+      return { ok: false, mensagem: 'Colunas obrigatórias não encontradas na Estrutura de Produtos.' };
+
+    // ── Leitura 3: mapa PA para inferir tipoMov quando não há coluna ─────
+    const mapaPA = iTipoMov < 0 ? _mapaStatusCadastroPA() : null;
+
+    const cod   = codigoPA.toUpperCase();
+    const itens = dataEst.slice(1)
+      .filter(r => String(r[iCodPA]||'').trim().toUpperCase() === cod && String(r[iCodIns]||'').trim())
       .map(r => {
-        const qtdBom=Number(r[iBom]||0), qtdPedido=Number(r[iPedido]||0), saldo=Number(r[iSaldo]||0), qtdBaixar=qtdBom*qtdPedido;
-        const tipoMov = iTipoMov>=0 ? String(r[iTipoMov]||'').trim().toUpperCase()||'INSUMO' : 'INSUMO';
-        return { ordem:String(r[iOrdem]||'').trim(), codigo:String(r[iCodigo]||'').trim(), descricao:String(r[iDesc]||'').trim(), qtdBom, qtdPedido, qtdBaixar, saldoEstoque:saldo, permitido:saldo>=qtdBaixar, tipoMov };
+        const qtdBom    = Number(r[iQtdeEst]||0);
+        const qtdBaixar = qtdBom * qtdePedido;
+        const codIns    = String(r[iCodIns]||'').trim();
+        let tipoMov;
+        if (iTipoMov >= 0) {
+          tipoMov = String(r[iTipoMov]||'').trim().toUpperCase() || 'INSUMO';
+        } else {
+          tipoMov = (mapaPA[codIns] !== undefined) ? 'PA' : 'INSUMO';
+        }
+        return {
+          ordem:        iOrdem >= 0 ? String(r[iOrdem]||'').trim() : '',
+          codigo:       codIns,
+          descricao:    iDescIns >= 0 ? String(r[iDescIns]||'').trim() : '',
+          qtdBom,
+          qtdPedido: qtdePedido,
+          qtdBaixar,
+          saldoEstoque: 0,
+          permitido:    true,
+          tipoMov,
+        };
       });
+
+    // Fallback: produto não está em Estrutura de Produtos — tenta aba BOM (fórmulas + sleep)
+    if (itens.length === 0) {
+      const shBom = _sh(NOME_ABA_BOM);
+      if (shBom) {
+        shBom.getRange('A2').setValue(String(opNumero).trim());
+        SpreadsheetApp.flush();
+
+        // As colunas QTDE_BOM/QTDE_PEDIDO dependem de fórmulas que recalculam
+        // após o flush. Em vez de um sleep fixo de 3s (sempre pago, mesmo
+        // quando a planilha já recalculou em 300ms), faz polling curto e sai
+        // assim que duas leituras seguidas derem o mesmo resultado — mesmo
+        // teto de espera (10×300ms=3s) do sleep antigo, mas normalmente sai
+        // bem antes.
+        let dataBom = shBom.getDataRange().getValues();
+        for (let tentativa = 0; tentativa < 10; tentativa++) {
+          Utilities.sleep(300);
+          const proxima = shBom.getDataRange().getValues();
+          if (JSON.stringify(proxima) === JSON.stringify(dataBom)) { dataBom = proxima; break; }
+          dataBom = proxima;
+        }
+        if (dataBom.length >= 2) {
+          const hBom = dataBom[0];
+          const idxB = {}, idxBN = {};
+          hBom.forEach((v,i) => { idxB[String(v).trim().toUpperCase()]=i; const k=_norm(v); if(!idxBN[k]) idxBN[k]=i; });
+          const iO  = idxB['ORDEM']??0,  iC = idxB['CODIGO']??1,  iD  = idxB['DESCRICAO']??2;
+          const iOP = idxB['OP']??3,     iB = idxB['QTDE_BOM']??idxB['QTD_BOM']??5;
+          const iP  = idxB['QTDE_PEDIDO']??idxB['QTD_PEDIDO']??6;
+          const iTM = idxBN['tipomov']??idxBN['tipo mov']??idxB['TIPO_MOV']??-1;
+          const opN = String(opNumero).trim(), opNorm = opN.replace(/[^0-9a-zA-Z]/g,'').toLowerCase();
+          dataBom.slice(1)
+            .filter(r => {
+              const opPlan = String(r[iOP]||'').trim();
+              return (opPlan === opN || opPlan.replace(/[^0-9a-zA-Z]/g,'').toLowerCase() === opNorm)
+                     && String(r[iC]||'').trim() !== '';
+            })
+            .forEach(r => {
+              const qtdBom = Number(r[iB]||0), qtdPedido = Number(r[iP]||0);
+              const tipoMov = iTM >= 0 ? String(r[iTM]||'').trim().toUpperCase() || 'INSUMO' : 'INSUMO';
+              itens.push({ ordem: String(r[iO]||'').trim(), codigo: String(r[iC]||'').trim(),
+                descricao: String(r[iD]||'').trim(), qtdBom, qtdPedido, qtdBaixar: qtdBom * qtdPedido,
+                saldoEstoque: 0, permitido: true, tipoMov });
+            });
+        }
+      }
+    }
+
     return { ok: true, itens };
   } catch(e) { return { ok: false, mensagem: 'Erro BOM: ' + e.message }; }
 }
@@ -1269,10 +1457,12 @@ function prepararEListarBOM(opNumero) {
 //  Igual ao prepararEListarBOM mas enriquece cada item com saldoAtual
 //  para exibir no modal com checkbox + quantidade ajustável
 // ════════════════════════════════════════════════════════════════════════════
-function prepararBOMComSaldo(opNumero) {
+function prepararBOMComSaldo(dados) {
   try {
-    // Passo 1: carrega a BOM normalmente (escreve OP na célula A2 e lê)
-    const resBom = prepararEListarBOM(opNumero);
+    const opNumero = typeof dados === 'object' ? (dados.op || dados) : dados;
+    const dadosOPC = typeof dados === 'object' ? { codigoPA: dados.codigoPA, qtde: dados.qtde } : null;
+    // Passo 1: carrega estrutura de produto (sem sleep — lê OPS ou usa dados do frontend)
+    const resBom = prepararEListarBOM(opNumero, dadosOPC);
     if (!resBom.ok) return resBom;
     if (!resBom.itens.length) return { ok: true, itens: [] };
 
@@ -1323,10 +1513,11 @@ function baixarBOMComTipo(movimentos, dadosBase) {
   try {
     if (!movimentos?.length) return { ok: false, mensagem: 'Nenhum item para baixar.' };
     const op=String(dadosBase.op||'').trim(), usuario=String(dadosBase.usuario||''), computer=String(dadosBase.computer||''), localizacao=String(dadosBase.localizacao||''), ip=String(dadosBase.ip||''), obs=String(dadosBase.obs||'');
+    const chaveIdem=String(dadosBase.chaveIdem||'').trim();
     const listaInsumo=[], listaPA=[];
     for (const item of movimentos) {
       const tipo = String(item.tipoMov||'INSUMO').trim().toUpperCase();
-      const mov  = { codigo:String(item.codigo||'').trim(), descricao:String(item.descricao||''), qtde:Number(item.qtdBaixar||0), tipo:'SAIDA', op, usuario, computer, localizacao, ip, obs:obs||'Baixa BOM — OP '+op, qrcode:'', endereco:'', chave:'' };
+      const mov  = { codigo:String(item.codigo||'').trim(), descricao:String(item.descricao||''), qtde:Number(item.qtdBaixar||0), tipo:'SAIDA', op, usuario, computer, localizacao, ip, obs:obs||'Baixa BOM — OP '+op, qrcode:'', endereco:'', chave:chaveIdem };
       if (tipo==='PA') listaPA.push(mov); else listaInsumo.push(mov);
     }
     const resultados = { ok:true, insumos:null, pa:null, erros:[] };

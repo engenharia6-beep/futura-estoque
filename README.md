@@ -6,12 +6,41 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @25 | Frontend: `af69bbc`+**
+**GAS ativo: @26 | Frontend: `af69bbc`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
 > próprio bump. Ao publicar mudanças no frontend, atualize essa constante
 > (e a linha acima) para o hash do commit que acabou de subir.
+
+---
+
+### 🚨 Regra obrigatória antes de QUALQUER deploy do backend
+
+O sistema está **em produção**. Antes de rodar `clasp push` + `clasp deploy`,
+SEMPRE confirme que a cópia local que vai ser publicada bate com o que está
+**realmente ativo no Apps Script agora** — não confie cegamente em nenhuma
+cópia local (nem `futura-estoque-gas`, nem `Codigo.txt` deste repo), porque
+elas podem estar desatualizadas em relação ao deploy vigente.
+
+```bash
+# Puxa o conteúdo AO VIVO para uma pasta separada e compara antes de mexer
+cd "C:\Users\Delmer Pereira\Documents\GitHub\futura-estoque-gas"
+clasp pull   # traz o HEAD atual do Apps Script para cá
+git diff     # (se este diretório virar um repo git — ver "Assuntos em aberto")
+# ou, sem git: diff manual contra a cópia que você está prestes a editar/publicar
+```
+
+E depois de publicar, **sempre valide de volta**: `clasp pull` numa pasta
+limpa e `diff` contra o que foi enviado, pra confirmar que o push chegou
+inteiro e sem regressão — não basta o comando "ter dado certo".
+
+**Por que essa regra existe:** em 2026-08-04 a `@25` foi publicada usando
+`futura-estoque-gas` como base sem essa checagem, e essa cópia estava
+desatualizada — removeu sem querer 3 proteções que já estavam em produção
+desde @20-@24 (bloqueio de pagamento duplicado de OP e fim da baixa dupla de
+insumo no Triangular). Corrigido na `@26` no mesmo dia. Ver histórico de
+deploys no fim deste arquivo.
 
 ---
 
@@ -130,12 +159,13 @@ lista todas, `clasp deploy -i <deploymentId> -V <número>` aponta a
 implantação ativa de volta pra uma versão anterior sem precisar reescrever
 código.
 
-> ⚠️ **Existe uma segunda cópia local divergente** em
+> ⚠️ **Existe uma segunda cópia local** em
 > `C:\Users\DELMER~1\AppData\Local\Temp\claude\gas-futura\` (mesmo
-> `scriptId`, conteúdo diferente — parece um rascunho de uma sessão antiga
-> que nunca foi publicado). **Não é a fonte de verdade** — fica numa pasta
-> temporária do sistema, pode sumir a qualquer momento, e diverge do que
-> está realmente em produção. Ver "Assuntos em aberto" abaixo.
+> `scriptId`). Em 2026-08-04 ela foi sincronizada manualmente com
+> `futura-estoque-gas` (as duas batem hoje), mas fica numa pasta
+> **temporária do sistema** — pode sumir ou ficar desatualizada de novo a
+> qualquer momento sem aviso. Trate como descartável: `futura-estoque-gas`
+> é a única pasta que deve ser considerada fonte de verdade local.
 
 ---
 
@@ -149,14 +179,16 @@ código.
 
 ### 📋 Assuntos em aberto
 
-- **Cópia divergente do backend em pasta temp** (ver aviso acima) — decidir
-  se as mudanças de lá eram intencionais (e nesse caso comparar/mesclar com
-  `futura-estoque-gas`) ou se é só rascunho descartável.
 - **Backend sem controle de versão em git** — hoje só existe o histórico de
-  versões do próprio Apps Script (`clasp versions`), sem diff/blame/PR.
-  Considerar versionar `futura-estoque-gas` como repo git próprio (ou
-  incorporar `Código.js` a este repo como fonte única) se isso continuar
-  gerando confusão.
+  versões do próprio Apps Script (`clasp versions`), sem diff/blame/PR, e foi
+  exatamente essa falta de rastreabilidade que permitiu o incidente do @25
+  passar despercebido antes do deploy. Considerar versionar
+  `futura-estoque-gas` como repo git próprio (ou incorporar `Código.js` a
+  este repo como fonte única) para ter diff real de toda mudança de backend
+  antes de publicar.
+- **Pasta temp `gas-futura`** — sincronizada com `futura-estoque-gas` em
+  2026-08-04, mas por estar em `AppData\Local\Temp` pode ser recriada
+  desatualizada por uma sessão futura. O ideal é parar de usá-la.
 
 ---
 
@@ -175,4 +207,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @22 | fix: idempotência em gravarMovimento (insumo); chaveIdem em movimentos manuais PA |
 | @23 | fix: bloqueia baixa duplicada de OP real (PA Direto, BOM, Triangular) |
 | @24 | fix: remove baixa automatica de insumos duplicada no Triangular |
-| @25 | ✅ **ATIVO** — perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
+| @25 | ⚠️ **REGREDIU @20-@24** — publicada a partir de uma cópia local desatualizada; perdeu o bloqueio de OP duplicada e voltou a baixar insumo em dobro no Triangular. Corrigida em minutos pela @26. Motivo pelo qual a regra de verificação pré-deploy acima existe. |
+| @26 | ✅ **ATIVO** — restaura as proteções @20-@24 (bloqueio de OP duplicada, sem baixa dupla no Triangular) + mantém perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
