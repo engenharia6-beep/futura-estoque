@@ -264,6 +264,7 @@ function doPost(e) {
       'listarCadastro':         () => listarItensCadastro(dados.filtroSituacao),
       'salvarCadastro':         () => salvarItemCadastro(dados),
       'obterFormulasInsumo':    () => obterCamposComFormulaCadastro(dados.codigo),
+      'obterResumoDashboard':   () => obterResumoDashboard(),
 
       // ── Cadastro PA ───────────────────────────────────────────────────────
       'listarCadastroPA':       () => listarItensCadastroPA(dados.filtroSituacao),
@@ -732,6 +733,56 @@ function salvarItemCadastroPA(dados) {
       }
     }));
     return { ok: true, acao: 'criado', mensagem: 'Item PA criado!' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  DASHBOARD — resumo leve (só contagens, sem montar/enviar os itens
+//  completos). Antes o dashboard chamava listarCadastro + listarCadastroPA
+//  inteiros (todas as colunas de ~1400 itens) só pra contar 3 números.
+// ════════════════════════════════════════════════════════════════════════════
+function obterResumoDashboard() {
+  try {
+    const shIns = _sh(NOME_ABA_CADASTRO);
+    let totalInsumos = 0, criticos = 0;
+    if (shIns) {
+      const data = shIns.getDataRange().getValues();
+      const h    = data[0];
+      const iCOD = _idxCol(h, 'CÓDIGO');
+      const iSIT = _idxCol(h, 'Situação');
+      const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+      const iMIN = _idxCol(h, 'Estoque_Minimo');
+      for (let i = 1; i < data.length; i++) {
+        const r   = data[i];
+        const cod = iCOD >= 0 ? String(r[iCOD]||'').trim() : '';
+        if (!cod) continue;
+        const sit = iSIT >= 0 ? String(r[iSIT]||'').trim().toUpperCase() : '';
+        if (sit !== 'ATIVO' && sit !== '') continue; // mesmo filtro padrão de listarItensCadastro('ATIVO')
+        totalInsumos++;
+        const atual = iEA  >= 0 ? Number(r[iEA]||0)  : 0;
+        const min   = iMIN >= 0 ? Number(r[iMIN]||0) : 0;
+        if (min > 0 && atual <= min) criticos++;
+      }
+    }
+
+    const shPA = _sh(NOME_ABA_CADASTRO_PA);
+    let totalPA = 0;
+    if (shPA) {
+      const data = shPA.getDataRange().getValues();
+      const h    = data[0];
+      const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+      const iSIT = _idxCol(h, 'Situação');
+      for (let i = 1; i < data.length; i++) {
+        const r   = data[i];
+        const cod = iCOD >= 0 ? String(r[iCOD]||'').trim() : '';
+        if (!cod) continue;
+        const sit = iSIT >= 0 ? String(r[iSIT]||'').trim().toUpperCase() : '';
+        if (sit !== 'ATIVO' && sit !== '') continue;
+        totalPA++;
+      }
+    }
+
+    return { ok: true, totalInsumos, totalPA, criticos };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 

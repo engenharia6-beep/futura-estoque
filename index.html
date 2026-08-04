@@ -1057,12 +1057,27 @@ function setBtn(id, disabled, html) { const b = document.getElementById(id); if(
 //  DASHBOARD
 // ══════════════════════════════════════════════════════
 async function carregarDashboard() {
-  if (!insumoCache.length) await carregarInsumos(true);
-  if (!paCache.length)     await carregarPA(true);
-  document.getElementById('dash-total-insumos').textContent = insumoCache.length;
-  document.getElementById('dash-total-pa').textContent      = paCache.length;
-  const criticos = insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin||0) && i.estoqueMin > 0).length;
-  document.getElementById('dash-criticos').textContent = criticos;
+  // Se Insumos/PA já foram abertos nesta sessão, os catálogos completos já
+  // estão em memória — calcula na hora, sem chamada nenhuma ao backend.
+  if (insumoCache.length && paCache.length) {
+    document.getElementById('dash-total-insumos').textContent = insumoCache.length;
+    document.getElementById('dash-total-pa').textContent      = paCache.length;
+    document.getElementById('dash-criticos').textContent =
+      insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin||0) && i.estoqueMin > 0).length;
+    return;
+  }
+  // Senão, pede só as 3 contagens em vez do catálogo inteiro (todas as
+  // colunas de ~1400 itens) — bem mais rápido.
+  try {
+    const res = await api('obterResumoDashboard');
+    document.getElementById('dash-total-insumos').textContent = res?.totalInsumos ?? 0;
+    document.getElementById('dash-total-pa').textContent      = res?.totalPA ?? 0;
+    document.getElementById('dash-criticos').textContent      = res?.criticos ?? 0;
+  } catch(e) {
+    document.getElementById('dash-total-insumos').textContent = '?';
+    document.getElementById('dash-total-pa').textContent      = '?';
+    document.getElementById('dash-criticos').textContent      = '?';
+  }
 }
 async function recarregarDashboard() {
   insumoCache = []; paCache = [];

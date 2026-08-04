@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @27 | Frontend: `af69bbc`+**
+**GAS ativo: @28 | Frontend: `d1d73ff`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,26 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-08-04
 
 ### ✅ Funcionando
+
+**Dashboard mais rápido (novo — 2026-08-04)**
+- `recarregarDashboard` ("↻ Atualizar" no Início) chegava a levar ~13s: pedia
+  o catálogo completo de Insumos e depois o de PA (todas as colunas, ~1400
+  itens no total), em série, só pra contar 3 números
+- Nova ação leve `obterResumoDashboard` retorna só
+  `{ totalInsumos, totalPA, criticos }` — 1 chamada em vez de 2, sem montar
+  nem transmitir os itens completos
+- Se Insumos/PA já foram abertos na sessão, o dashboard nem chama a API —
+  calcula na hora a partir do cache local
+
+**Baixa via BOM não força mais além do saldo (novo — 2026-08-04)**
+- O modal de confirmação da baixa via BOM permitia editar/enviar quantidade
+  maior que o saldo disponível ("confirme assim mesmo"), mas o backend
+  rejeitava o **lote inteiro** nesse caso — nem os itens com saldo
+  suficiente eram gravados
+- Alinhado com o comportamento que já existia em PA Direto/Triangular: itens
+  sem saldo suficiente ficam bloqueados/desmarcados automaticamente; o
+  campo de quantidade também trava no valor disponível em vez de só
+  avisar visualmente
 
 **Endereço único por item (novo — 2026-08-04)**
 - Decisão de negócio: cada item (Insumo ou PA) tem **1 endereço fixo só**,
@@ -225,4 +245,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @24 | fix: remove baixa automatica de insumos duplicada no Triangular |
 | @25 | ⚠️ **REGREDIU @20-@24** — publicada a partir de uma cópia local desatualizada; perdeu o bloqueio de OP duplicada e voltou a baixar insumo em dobro no Triangular. Corrigida em minutos pela @26. Motivo pelo qual a regra de verificação pré-deploy acima existe. |
 | @26 | restaura as proteções @20-@24 (bloqueio de OP duplicada, sem baixa dupla no Triangular) + mantém perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
-| @27 | ✅ **ATIVO** — feat: endereço único por item, lido direto do Cadastro/Cadastro_PA; remove distribuição por endereço em Movimento; mudarEndereco/PA viram edição simples de cadastro |
+| @27 | feat: endereço único por item, lido direto do Cadastro/Cadastro_PA; remove distribuição por endereço em Movimento; mudarEndereco/PA viram edição simples de cadastro |
+| @28 | ✅ **ATIVO** — feat: obterResumoDashboard, resumo leve do dashboard (só contagens, sem enviar itens completos) |
