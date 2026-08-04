@@ -81,8 +81,10 @@ deploys no fim deste arquivo.
   antes, então o frontend não precisou mudar
 - `mudarEndereco`/`mudarEnderecoPA` deixaram de gerar movimento (SAÍDA +
   ENTRADA) e viraram uma edição direta do campo Endereço no
-  Cadastro/Cadastro_PA — ação: `{ codigo, novoEndereco }`. Ainda sem tela no
-  frontend chamando essa ação.
+  Cadastro/Cadastro_PA — ação: `{ codigo, novoEndereco }`
+- Botão "📍 Alterar Endereço" no detalhe de Insumo e de PA, abre modal
+  simples (endereço atual + novo endereço), atualiza cache local e a lista
+  na hora — sem chamada de backend nova, só liga a UI ao que já existia
 
 **Performance (2026-08-03/04)**
 - `obterSaldo` / `obterSaldoPA` leem `ESTOQUE_ATUAL` do Cadastro/Cadastro_PA

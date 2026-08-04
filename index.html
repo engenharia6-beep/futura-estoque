@@ -515,6 +515,7 @@
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
       <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('insumo')">⚖️ Ajuste de Inventário</button>
+      <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
     </div>
   </div>
@@ -583,6 +584,7 @@
       <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
       <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('pa')">⚖️ Ajuste de Inventário</button>
+      <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
     </div>
   </div>
@@ -685,6 +687,37 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modal-ajuste-inv')">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-ajuste" disabled onclick="confirmarAjuste()">Confirmar Ajuste</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: ALTERAR ENDEREÇO (insumo e PA)
+══════════════════════════════════════════════════════ -->
+<div id="modal-alt-endereco" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">📍 Alterar Endereço</span>
+      <button onclick="fecharModal('modal-alt-endereco')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+        <span style="color:var(--text-muted)">Item: </span>
+        <strong id="alt-end-item"></strong>
+      </div>
+      <div class="field"><label>Endereço atual</label>
+        <input id="alt-end-atual" type="text" disabled style="font-family:var(--mono);opacity:.7">
+      </div>
+      <div class="field"><label>Novo endereço</label>
+        <input id="alt-end-novo" type="text" placeholder="Ex: A1-01" autocapitalize="characters"
+          style="font-family:var(--mono);font-size:16px;font-weight:700">
+      </div>
+      <div id="alt-end-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-alt-endereco')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-alt-end" onclick="confirmarAlterarEndereco()">Confirmar</button>
     </div>
   </div>
 </div>
@@ -1565,6 +1598,50 @@ async function confirmarAjuste() {
     setTimeout(() => fecharModal('modal-ajuste-inv'), 2000);
   } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
   finally { setBtn('btn-confirmar-ajuste', false, 'Confirmar Ajuste'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  ALTERAR ENDEREÇO (insumo e PA) — edição direta do
+//  cadastro, endereço é único por item (sem movimento)
+// ══════════════════════════════════════════════════════
+function abrirAlterarEndereco() {
+  if (!_itemAtual) return;
+  document.getElementById('alt-end-item').textContent = `${_itemAtual.codigo} — ${_itemAtual.descricao}`;
+  document.getElementById('alt-end-atual').value = _itemAtual.endereco || '(sem endereço)';
+  document.getElementById('alt-end-novo').value  = _itemAtual.endereco || '';
+  document.getElementById('alt-end-msg').className = 'msg';
+  setBtn('btn-confirmar-alt-end', false, 'Confirmar');
+  fecharModal(_itemAtual._tipo === 'pa' ? 'modal-pa' : 'modal-insumo');
+  abrirModal('modal-alt-endereco');
+}
+
+async function confirmarAlterarEndereco() {
+  if (!_itemAtual) return;
+  const novoEndereco = document.getElementById('alt-end-novo').value.trim();
+  const msg = document.getElementById('alt-end-msg');
+  if (!novoEndereco) { mostrarMsg(msg, 'Informe o novo endereço.', 'err'); return; }
+
+  setBtn('btn-confirmar-alt-end', true, '<span class="spinner"></span>');
+  try {
+    const isPA = _itemAtual._tipo === 'pa';
+    const res  = await api(isPA ? 'mudarEnderecoPA' : 'mudarEndereco', { codigo: _itemAtual.codigo, novoEndereco });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao alterar endereço.', 'err'); return; }
+
+    // Atualiza o cache local pra refletir na hora, sem esperar recarregar a lista
+    const cache = isPA ? paCache : insumoCache;
+    const item  = cache.find(i => i.codigo === _itemAtual.codigo);
+    if (item) item.endereco = novoEndereco;
+    _itemAtual.endereco = novoEndereco;
+    if (isPA) renderPA(paCache); else renderInsumos(insumoCache);
+
+    toast('✔ Endereço atualizado!');
+    mostrarMsg(msg, '✔ Endereço atualizado!', 'ok');
+    setTimeout(() => {
+      fecharModal('modal-alt-endereco');
+      if (isPA) abrirDetalhePA(_itemAtual.codigo); else abrirDetalheInsumo(_itemAtual.codigo);
+    }, 900);
+  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
+  finally { setBtn('btn-confirmar-alt-end', false, 'Confirmar'); }
 }
 
 // ══════════════════════════════════════════════════════
