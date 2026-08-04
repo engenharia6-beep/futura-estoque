@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @26 | Frontend: `af69bbc`+**
+**GAS ativo: @27 | Frontend: `af69bbc`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,11 +44,27 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-08-03
+## Estado atual — 2026-08-04
 
 ### ✅ Funcionando
 
-**Performance (novo — 2026-08-03)**
+**Endereço único por item (novo — 2026-08-04)**
+- Decisão de negócio: cada item (Insumo ou PA) tem **1 endereço fixo só**,
+  não mais saldo espalhado por vários endereços
+- Endereço agora é um campo direto do cadastro — sem fórmula — em
+  `Cadastro` (coluna D) e `Cadastro_PA` (coluna F)
+- Backend não distribui mais saída entre endereços (`_distribuirPorEndereco`
+  removido): toda gravação de Movimento/Movimento_PA usa o endereço fixo do
+  item, lido do Cadastro/Cadastro_PA
+- `obterEnderecosSaldo`/`obterEnderecosSaldoPA` leem só o Cadastro
+  (rapidíssimo) em vez de escanear Movimento — mesmo formato de resposta de
+  antes, então o frontend não precisou mudar
+- `mudarEndereco`/`mudarEnderecoPA` deixaram de gerar movimento (SAÍDA +
+  ENTRADA) e viraram uma edição direta do campo Endereço no
+  Cadastro/Cadastro_PA — ação: `{ codigo, novoEndereco }`. Ainda sem tela no
+  frontend chamando essa ação.
+
+**Performance (2026-08-03/04)**
 - `obterSaldo` / `obterSaldoPA` leem `ESTOQUE_ATUAL` do Cadastro/Cadastro_PA
   (coluna calculada, 1 linha por item) em vez de somar o histórico inteiro de
   Movimento/Movimento_PA a cada chamada — não degrada mais conforme a
@@ -208,4 +224,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @23 | fix: bloqueia baixa duplicada de OP real (PA Direto, BOM, Triangular) |
 | @24 | fix: remove baixa automatica de insumos duplicada no Triangular |
 | @25 | ⚠️ **REGREDIU @20-@24** — publicada a partir de uma cópia local desatualizada; perdeu o bloqueio de OP duplicada e voltou a baixar insumo em dobro no Triangular. Corrigida em minutos pela @26. Motivo pelo qual a regra de verificação pré-deploy acima existe. |
-| @26 | ✅ **ATIVO** — restaura as proteções @20-@24 (bloqueio de OP duplicada, sem baixa dupla no Triangular) + mantém perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
+| @26 | restaura as proteções @20-@24 (bloqueio de OP duplicada, sem baixa dupla no Triangular) + mantém perf: saldo via ESTOQUE_ATUAL (Cadastro/Cadastro_PA) + polling no lugar de sleep fixo no BOM |
+| @27 | ✅ **ATIVO** — feat: endereço único por item, lido direto do Cadastro/Cadastro_PA; remove distribuição por endereço em Movimento; mudarEndereco/PA viram edição simples de cadastro |

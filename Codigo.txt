@@ -118,13 +118,15 @@ function _montarLinhaMovimento(header, campos) {
 }
 
 // ── Helpers compartilhados ───────────────────────────────────────────────────
+// Endereço é 1 só por item (fixo no Cadastro/Cadastro_PA, não varia por
+// movimento) — aqui só somamos o saldo total por código para validação
+// dentro de um lote, sem quebrar por endereço.
 function _saldosEmMemoria(data, header) {
   const idxN = {};
   header.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
-  const iT = idxN['tipo']     ?? -1;
-  const iC = idxN['codigo']   ?? -1;
-  const iQ = idxN['qtde']     ?? -1;
-  const iE = idxN['endereco'] ?? -1;
+  const iT = idxN['tipo']   ?? -1;
+  const iC = idxN['codigo'] ?? -1;
+  const iQ = idxN['qtde']   ?? -1;
   const mapa = {};
   for (let i = 1; i < data.length; i++) {
     const r   = data[i];
@@ -132,33 +134,65 @@ function _saldosEmMemoria(data, header) {
     if (!cod) continue;
     const t   = String(r[iT] || '').toUpperCase();
     const q   = Number(r[iQ] || 0);
-    const end = (iE >= 0 ? String(r[iE] || '').trim() : '') || '(sem endereço)';
     const inc = t === 'ENTRADA' ? q : -q;
-    if (!mapa[cod]) mapa[cod] = {};
-    mapa[cod][end] = (mapa[cod][end] || 0) + inc;
+    mapa[cod] = (mapa[cod] || 0) + inc;
   }
-  const resultado = {};
-  for (const [cod, ends] of Object.entries(mapa)) {
-    resultado[cod] = Object.entries(ends)
-      .map(([endereco, s]) => ({ endereco, saldo: s }))
-      .filter(x => x.saldo > 0)
-      .sort((a, b) => b.saldo - a.saldo);
-  }
-  return resultado;
+  return mapa;
 }
 
-function _distribuirPorEndereco(enderecos, qtdeNecessaria) {
-  const totalDisp = enderecos.reduce((s, e) => s + e.saldo, 0);
-  if (qtdeNecessaria > totalDisp) return null;
-  const dist = [];
-  let restante = qtdeNecessaria;
-  for (const { endereco, saldo } of enderecos) {
-    if (restante <= 0) break;
-    const baixar = Math.min(saldo, restante);
-    dist.push({ endereco, qtde: baixar });
-    restante -= baixar;
+// Lê o endereço fixo (coluna D) de um ou mais códigos do Cadastro.
+function _mapaEnderecoCadastro() {
+  const sh = _sh(NOME_ABA_CADASTRO);
+  if (!sh) return {};
+  const data = sh.getDataRange().getValues();
+  const h    = data[0];
+  const iCOD = _idxCol(h, 'CÓDIGO');
+  const iEND = _idxCol(h, 'Endereço');
+  const mapa = {};
+  if (iCOD < 0 || iEND < 0) return mapa;
+  for (let i = 1; i < data.length; i++) {
+    const cod = String(data[i][iCOD] || '').trim();
+    if (cod) mapa[cod] = String(data[i][iEND] || '').trim();
   }
-  return dist;
+  return mapa;
+}
+
+// Lê o endereço fixo (coluna F) de um ou mais códigos do Cadastro_PA.
+function _mapaEnderecoCadastroPA() {
+  const sh = _sh(NOME_ABA_CADASTRO_PA);
+  if (!sh) return {};
+  const data = sh.getDataRange().getValues();
+  const h    = data[0];
+  const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+  const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
+  const mapa = {};
+  if (iCOD < 0 || iEND < 0) return mapa;
+  for (let i = 1; i < data.length; i++) {
+    const cod = String(data[i][iCOD] || '').trim();
+    if (cod) mapa[cod] = String(data[i][iEND] || '').trim();
+  }
+  return mapa;
+}
+
+// Lê o ESTOQUE_ATUAL de todos os códigos de uma vez (Cadastro ou Cadastro_PA)
+// — usado quando é preciso o saldo de vários itens de uma vez (BOM, baixa de
+// insumos), mais rápido que ler item a item ou escanear Movimento.
+function _mapaEstoqueAtualCadastro(nomeAba) {
+  try {
+    const sh = _sh(nomeAba);
+    if (!sh) return {};
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const mapa = {};
+    if (iCOD < 0 || iEA < 0) return mapa;
+    for (let i = 1; i < data.length; i++) {
+      const cod = String(data[i][iCOD]||'').trim();
+      if (cod) mapa[cod] = Number(data[i][iEA]||0);
+    }
+    return mapa;
+  } catch(e) { return {}; }
 }
 
 function _verificarGravacao(sh, ids, linhasAntes) {
@@ -354,7 +388,7 @@ function _baixarInsumosDaEstrutura(codigoPA, qtdePABaixado, dadosBase) {
 
     const _dadosMov   = _sh(NOME_ABA_MOVIMENTO).getDataRange().getValues();
     const saldosInsumo = _saldosEmMemoria(_dadosMov, _dadosMov[0]);
-    const saldoTotal = (cod) => (saldosInsumo[cod] || []).reduce((s, e) => s + e.saldo, 0);
+    const saldoTotal = (cod) => saldosInsumo[cod] || 0;
 
     const paraGravar = [];
     const avisos     = [];
@@ -752,33 +786,25 @@ function obterSaldo(codigo) {
   } catch(e) { return 0; }
 }
 
-function obterEnderecosSaldo(codigo, preData) {
+// Endereço é fixo por item (Cadastro, coluna D) — não varia por movimento.
+// Retorna { saldo, enderecos:[{endereco,saldo}] } lendo só o Cadastro, sem
+// tocar em Movimento. Mantém o mesmo formato de resposta de antes (lista de
+// 1 endereço no máximo) para não exigir mudança no frontend.
+function obterEnderecosSaldo(codigo) {
   try {
-    const sh   = _sh(NOME_ABA_MOVIMENTO);
+    const sh = _sh(NOME_ABA_CADASTRO);
     if (!sh) return { saldo: 0, enderecos: [] };
-    const data = preData || sh.getDataRange().getValues();
+    const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const idxN = {};
-    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
-    const iT = idxN['tipo'] ?? -1, iC = idxN['codigo'] ?? -1;
-    const iQ = idxN['qtde'] ?? -1, iE = idxN['endereco'] ?? -1;
-    if (iT < 0 || iC < 0 || iQ < 0) return { saldo: 0, enderecos: [] };
-    let saldoTotal = 0;
-    const porEnd   = {};
-    for (let i = 1; i < data.length; i++) {
-      const r = data[i];
-      if (String(r[iC]||'').trim() !== String(codigo).trim()) continue;
-      const t   = String(r[iT]||'').toUpperCase();
-      const q   = Number(r[iQ]||0);
-      const key = (iE >= 0 ? String(r[iE]||'').trim() : '') || '(sem endereço)';
-      const inc = t === 'ENTRADA' ? q : -q;
-      saldoTotal    += inc;
-      porEnd[key]    = (porEnd[key] || 0) + inc;
-    }
-    return {
-      saldo: saldoTotal,
-      enderecos: Object.entries(porEnd).map(([endereco, s]) => ({ endereco, saldo: s })).filter(x => x.saldo > 0).sort((a,b) => b.saldo - a.saldo)
-    };
+    const iCOD = _idxCol(h, 'CÓDIGO');
+    const iEND = _idxCol(h, 'Endereço');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    if (iCOD < 0) return { saldo: 0, enderecos: [] };
+    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
+    if (!row) return { saldo: 0, enderecos: [] };
+    const saldo    = iEA  >= 0 ? Number(row[iEA]||0) : 0;
+    const endereco = iEND >= 0 ? String(row[iEND]||'').trim() : '';
+    return { saldo, enderecos: endereco ? [{ endereco, saldo }] : [] };
   } catch(e) { return { saldo: 0, enderecos: [] }; }
 }
 
@@ -804,20 +830,14 @@ function gravarMovimento(dados) {
     const isSaida     = String(dados.tipo||'').toUpperCase() === 'SAIDA';
     const qtde        = Number(dados.qtde || 0);
     const agora       = new Date();
-    const ids         = [];
+    const endereco    = _mapaEnderecoCadastro()[codigo] || '';
     if (isSaida) {
-      const { saldo: saldoTotal, enderecos } = obterEnderecosSaldo(codigo, dadosSh);
+      const saldoTotal = obterSaldo(codigo);
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
-      const dist = _distribuirPorEndereco(enderecos, qtde);
-      if (!dist) return { ok: false, mensagem: `Não foi possível distribuir o saldo.` };
-      for (const { endereco, qtde: q } of dist) {
-        const id = Utilities.getUuid().substring(0,8); ids.push(id);
-        sh.appendRow(_montarLinhaMovimento(header, Object.assign({}, dados, { id, data: agora, qtde: q, endereco, codigo })));
-      }
-    } else {
-      const id = Utilities.getUuid().substring(0,8); ids.push(id);
-      sh.appendRow(_montarLinhaMovimento(header, Object.assign({}, dados, { id, data: agora, codigo })));
     }
+    const id  = Utilities.getUuid().substring(0,8);
+    const ids = [id];
+    sh.appendRow(_montarLinhaMovimento(header, Object.assign({}, dados, { id, data: agora, qtde, endereco, codigo })));
     const verif = _verificarGravacao(sh, ids, linhasAntes);
     if (!verif.ok) return { ok: false, mensagem: 'Movimento não confirmado. ' + (verif.erro||'') };
     return { ok: true, gravados: ids.length };
@@ -859,8 +879,8 @@ function gravarMovimentosEmLote(movimentos) {
       }
     }
 
-    const saldosMap  = _saldosEmMemoria(dadosSh, header);
-    const saldoTotal = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
+    const saldosMap   = _saldosEmMemoria(dadosSh, header);
+    const enderecoMap = _mapaEnderecoCadastro();
     const mapa = _mapaStatusCadastro();
     const erros = [], ids = [], agora = new Date();
     for (const mov of movimentos) {
@@ -869,7 +889,7 @@ function gravarMovimentosEmLote(movimentos) {
       if (mapa[cod] === undefined) { erros.push(`'${cod}' não cadastrado.`); continue; }
       if (mapa[cod] === 'INATIVO')  { erros.push(`'${cod}' INATIVO.`); continue; }
       if (String(mov.tipo||'').toUpperCase() === 'SAIDA') {
-        const s = saldoTotal(cod);
+        const s = saldosMap[cod]||0;
         if (Number(mov.qtde||0) > s) erros.push(`Saldo insuficiente '${cod}': disponível ${s}.`);
       }
     }
@@ -878,16 +898,8 @@ function gravarMovimentosEmLote(movimentos) {
     for (const mov of movimentos) {
       const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
       const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', localizacao: mov.localizacao||'', computer: mov.computer||'', ip: mov.ip||'' };
-      if (String(mov.tipo||'').toUpperCase() === 'SAIDA') {
-        const dist = _distribuirPorEndereco(saldosMap[cod]||[], qtde) || [{ endereco: mov.endereco||'', qtde }];
-        for (const { endereco, qtde: q } of dist) {
-          const id = Utilities.getUuid().substring(0,8); ids.push(id);
-          linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde: q, endereco })));
-        }
-      } else {
-        const id = Utilities.getUuid().substring(0,8); ids.push(id);
-        linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: mov.endereco||'' })));
-      }
+      const id = Utilities.getUuid().substring(0,8); ids.push(id);
+      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: enderecoMap[cod]||'' })));
     }
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
@@ -950,27 +962,23 @@ function _estoqueInicialPA(codigo) {
   } catch(e) { return 0; }
 }
 
+// Endereço é fixo por item (Cadastro_PA, coluna F) — lê só o Cadastro_PA,
+// sem tocar em Movimento_PA. Mesmo formato de resposta de antes.
 function obterEnderecosSaldoPA(codigo) {
   try {
-    const sh   = _sh(NOME_ABA_MOVIMENTO_PA);
+    const sh = _sh(NOME_ABA_CADASTRO_PA);
     if (!sh) return { saldo: 0, enderecos: [] };
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const idxN = {};
-    h.forEach((v, i) => { const k = _norm(v); if (!idxN[k]) idxN[k] = i; });
-    const iT = idxN['tipo']??-1, iC = idxN['codigo']??-1, iQ = idxN['qtde']??-1, iE = idxN['endereco']??-1;
-    if (iT<0||iC<0||iQ<0) return { saldo: 0, enderecos: [] };
-    let saldoTotal = _estoqueInicialPA(codigo);
-    const porEnd   = {};
-    for (let i = 1; i < data.length; i++) {
-      const r = data[i];
-      if (String(r[iC]||'').trim() !== String(codigo).trim()) continue;
-      const t = String(r[iT]||'').toUpperCase(), q = Number(r[iQ]||0);
-      const key = (iE>=0 ? String(r[iE]||'').trim() : '') || '(sem endereço)';
-      saldoTotal    += (t==='ENTRADA'?q:-q);
-      porEnd[key]    = (porEnd[key]||0) + (t==='ENTRADA'?q:-q);
-    }
-    return { saldo: saldoTotal, enderecos: Object.entries(porEnd).map(([endereco,s])=>({endereco,saldo:s})).filter(x=>x.saldo>0).sort((a,b)=>b.saldo-a.saldo) };
+    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    if (iCOD < 0) return { saldo: 0, enderecos: [] };
+    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
+    if (!row) return { saldo: 0, enderecos: [] };
+    const saldo    = iEA  >= 0 ? Number(row[iEA]||0) : 0;
+    const endereco = iEND >= 0 ? String(row[iEND]||'').trim() : '';
+    return { saldo, enderecos: endereco ? [{ endereco, saldo }] : [] };
   } catch(e) { return { saldo: 0, enderecos: [] }; }
 }
 
@@ -1028,7 +1036,7 @@ function gravarMovimentoPA(dados) {
     const saldosPA   = _saldosEmMemoria(dadosPA, headerPA);
     const linhasAntes= dadosPA.length;
     const agora      = new Date();
-    const ids        = [];
+    const endereco   = _mapaEnderecoCadastroPA()[codigo] || '';
     const base       = {
       data: agora, qrcode: dados.qrcode||'', tipo: dados.tipo||'',
       op: dados.op||'', codigo, descricao: dados.descricao||'',
@@ -1038,19 +1046,12 @@ function gravarMovimentoPA(dados) {
     };
 
     if (isSaida) {
-      const enderecos = saldosPA[codigo] || [];
-      const saldoTotal= enderecos.reduce((s, e) => s + e.saldo, 0);
+      const saldoTotal = saldosPA[codigo] || 0;
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo PA insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
-      const dist = _distribuirPorEndereco(enderecos, qtde);
-      if (!dist) return { ok: false, mensagem: 'Não foi possível distribuir o saldo.' };
-      for (const { endereco, qtde: q } of dist) {
-        const id = Utilities.getUuid().substring(0, 8); ids.push(id);
-        shPA.appendRow(_montarLinhaMovimento(headerPA, Object.assign({}, base, { id, qtde: q, endereco })));
-      }
-    } else {
-      const id = Utilities.getUuid().substring(0, 8); ids.push(id);
-      shPA.appendRow(_montarLinhaMovimento(headerPA, Object.assign({}, base, { id, qtde, endereco: dados.endereco||'' })));
     }
+    const id  = Utilities.getUuid().substring(0, 8);
+    const ids = [id];
+    shPA.appendRow(_montarLinhaMovimento(headerPA, Object.assign({}, base, { id, qtde, endereco })));
 
     SpreadsheetApp.flush();
 
@@ -1097,7 +1098,7 @@ function gravarMovimentosEmLotePA(movimentos) {
     }
 
     const saldosMap   = _saldosEmMemoria(dadosSh, header);
-    const saldoTotal  = (cod) => (saldosMap[cod]||[]).reduce((s,e)=>s+e.saldo,0);
+    const enderecoMap = _mapaEnderecoCadastroPA();
     const mapa = _mapaStatusCadastroPA();
     const erros = [], ids = [], agora = new Date();
     for (const mov of movimentos) {
@@ -1106,7 +1107,7 @@ function gravarMovimentosEmLotePA(movimentos) {
       if (mapa[cod]===undefined) { erros.push(`PA '${cod}' não cadastrado.`); continue; }
       if (mapa[cod]==='INATIVO')  { erros.push(`PA '${cod}' INATIVO.`); continue; }
       if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
-        const s = saldoTotal(cod);
+        const s = saldosMap[cod]||0;
         if (Number(mov.qtde||0) > s) erros.push(`Saldo PA insuficiente '${cod}': disponível ${s}.`);
       }
     }
@@ -1115,16 +1116,8 @@ function gravarMovimentosEmLotePA(movimentos) {
     for (const mov of movimentos) {
       const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
       const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', computer: mov.computer||'', localizacao: mov.localizacao||'', ip: mov.ip||'' };
-      if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
-        const dist = _distribuirPorEndereco(saldosMap[cod]||[], qtde) || [{ endereco: mov.endereco||'', qtde }];
-        for (const { endereco, qtde: q } of dist) {
-          const id = Utilities.getUuid().substring(0,8); ids.push(id);
-          linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde: q, endereco })));
-        }
-      } else {
-        const id = Utilities.getUuid().substring(0,8); ids.push(id);
-        linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: mov.endereco||'' })));
-      }
+      const id = Utilities.getUuid().substring(0,8); ids.push(id);
+      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: enderecoMap[cod]||'' })));
     }
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
@@ -1169,7 +1162,7 @@ function pagarOPTriangularPA(dados) {
     const saldoMapa   = _saldosEmMemoria(dadosSh, header);
     // Inclui estoque inicial para manter paridade com obterSaldoPA()
     const estoqueIni  = _estoqueInicialPA(codOrigem);
-    const saldoOrigem = estoqueIni + (saldoMapa[codOrigem]||[]).reduce((s,e)=>s+e.saldo,0);
+    const saldoOrigem = estoqueIni + (saldoMapa[codOrigem]||0);
     if (qtde > saldoOrigem) return { ok: false, mensagem: `Saldo insuficiente para ${codOrigem}. Disponível: ${saldoOrigem}.` };
 
     if (chaveIdem) {
@@ -1466,32 +1459,11 @@ function prepararBOMComSaldo(dados) {
     if (!resBom.ok) return resBom;
     if (!resBom.itens.length) return { ok: true, itens: [] };
 
-    // Passo 2: lê saldos de Insumos e PA em memória (uma leitura cada)
-    const saldosIns = (() => {
-      try {
-        const sh = _sh(NOME_ABA_MOVIMENTO);
-        if (!sh) return {};
-        const d = sh.getDataRange().getValues();
-        const sm = _saldosEmMemoria(d, d[0]);
-        const tot = {};
-        for (const [cod, ends] of Object.entries(sm))
-          tot[cod] = ends.reduce((s, e) => s + e.saldo, 0);
-        return tot;
-      } catch(e) { return {}; }
-    })();
-
-    const saldosPA = (() => {
-      try {
-        const sh = _sh(NOME_ABA_MOVIMENTO_PA);
-        if (!sh) return {};
-        const d = sh.getDataRange().getValues();
-        const sm = _saldosEmMemoria(d, d[0]);
-        const tot = {};
-        for (const [cod, ends] of Object.entries(sm))
-          tot[cod] = ends.reduce((s, e) => s + e.saldo, 0);
-        return tot;
-      } catch(e) { return {}; }
-    })();
+    // Passo 2: lê saldos (ESTOQUE_ATUAL) de todos os Insumos e PA de uma vez —
+    // mais rápido que escanear Movimento/Movimento_PA, e mesma fonte usada
+    // em obterSaldo/obterSaldoPA.
+    const saldosIns = _mapaEstoqueAtualCadastro(NOME_ABA_CADASTRO);
+    const saldosPA  = _mapaEstoqueAtualCadastro(NOME_ABA_CADASTRO_PA);
 
     // Passo 3: enriquece cada item com saldoAtual
     const itens = resBom.itens.map(it => {
@@ -1532,46 +1504,45 @@ function baixarBOMComTipo(movimentos, dadosBase) {
 // ════════════════════════════════════════════════════════════════════════════
 //  MUDANÇA DE ENDEREÇO
 // ════════════════════════════════════════════════════════════════════════════
+// Endereço agora é 1 campo fixo do Cadastro (não mais um saldo por endereço
+// em Movimento) — "mudar endereço" virou uma edição simples desse campo,
+// sem gerar movimento nenhum.
 function mudarEndereco(dados) {
   try {
-    const codigo=String(dados.codigo||'').trim(), endOrigem=String(dados.endOrigem||'').trim(), endDestino=String(dados.endDestino||'').trim(), qtde=Number(dados.qtde||0);
-    if (!codigo||!endOrigem||!endDestino||endOrigem===endDestino||!qtde||qtde<=0) return { ok:false, mensagem:'Dados inválidos.' };
-    const { enderecos } = obterEnderecosSaldo(codigo);
-    const endObj = enderecos.find(e => e.endereco===endOrigem);
-    if (!endObj||qtde>endObj.saldo) return { ok:false, mensagem:`Saldo insuficiente em '${endOrigem}'.` };
-    const sh=_sh(NOME_ABA_MOVIMENTO);
-    if (!sh) return { ok:false, mensagem:'Aba Movimento não encontrada.' };
-    const header=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
-    const linhasAntes=sh.getLastRow(), agora=new Date();
-    const base={ data:agora, qrcode:'', op:'', codigo, descricao:dados.descricao||'', chave:'', obs:`Mudança: ${endOrigem} → ${endDestino}`, usuario:dados.usuario||'', localizacao:dados.localizacao||'', computer:dados.computer||'', ip:dados.ip||'' };
-    const idS=Utilities.getUuid().substring(0,8), idE=Utilities.getUuid().substring(0,8);
-    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idS,tipo:'SAIDA',  qtde,endereco:endOrigem })));
-    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idE,tipo:'ENTRADA',qtde,endereco:endDestino})));
-    const verif=_verificarGravacao(sh,[idS,idE],linhasAntes);
-    if (!verif.ok) return { ok:false, mensagem:'Mudança não confirmada.' };
-    return { ok:true, gravados:2 };
-  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+    const codigo = String(dados.codigo || '').trim();
+    const novoEndereco = String(dados.novoEndereco ?? dados.endDestino ?? '').trim();
+    if (!codigo) return { ok: false, mensagem: 'Código não informado.' };
+    const sh = _sh(NOME_ABA_CADASTRO);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO');
+    const iEND = _idxCol(h, 'Endereço');
+    if (iCOD < 0 || iEND < 0) return { ok: false, mensagem: 'Coluna Endereço não encontrada no Cadastro.' };
+    const rowIdx = data.slice(1).findIndex(r => String(r[iCOD]||'').trim() === codigo);
+    if (rowIdx < 0) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
+    sh.getRange(rowIdx + 2, iEND + 1).setValue(novoEndereco);
+    return { ok: true, mensagem: 'Endereço atualizado!' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
 function mudarEnderecoPA(dados) {
   try {
-    const codigo=String(dados.codigo||'').trim(), endOrigem=String(dados.endOrigem||'').trim(), endDestino=String(dados.endDestino||'').trim(), qtde=Number(dados.qtde||0);
-    if (!codigo||!endOrigem||!endDestino||endOrigem===endDestino||!qtde||qtde<=0) return { ok:false, mensagem:'Dados inválidos.' };
-    const { enderecos } = obterEnderecosSaldoPA(codigo);
-    const endObj = enderecos.find(e => e.endereco===endOrigem);
-    if (!endObj||qtde>endObj.saldo) return { ok:false, mensagem:`Saldo insuficiente em '${endOrigem}'.` };
-    const sh=_sh(NOME_ABA_MOVIMENTO_PA);
-    if (!sh) return { ok:false, mensagem:'Aba Movimento_PA não encontrada.' };
-    const header=sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0];
-    const linhasAntes=sh.getLastRow(), agora=new Date();
-    const base={ data:agora, qrcode:'', op:'', codigo, descricao:dados.descricao||'', chave:'', obs:`Mudança PA: ${endOrigem} → ${endDestino}`, usuario:dados.usuario||'', localizacao:dados.localizacao||'', computer:dados.computer||'', ip:dados.ip||'' };
-    const idS=Utilities.getUuid().substring(0,8), idE=Utilities.getUuid().substring(0,8);
-    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idS,tipo:'SAIDA',  qtde,endereco:endOrigem })));
-    sh.appendRow(_montarLinhaMovimento(header, Object.assign({},base,{id:idE,tipo:'ENTRADA',qtde,endereco:endDestino})));
-    const verif=_verificarGravacao(sh,[idS,idE],linhasAntes);
-    if (!verif.ok) return { ok:false, mensagem:'Mudança PA não confirmada.' };
-    return { ok:true, gravados:2 };
-  } catch(e) { return { ok:false, mensagem:'Erro: '+e.message }; }
+    const codigo = String(dados.codigo || '').trim();
+    const novoEndereco = String(dados.novoEndereco ?? dados.endDestino ?? '').trim();
+    if (!codigo) return { ok: false, mensagem: 'Código PA não informado.' };
+    const sh = _sh(NOME_ABA_CADASTRO_PA);
+    if (!sh) return { ok: false, mensagem: 'Aba Cadastro_PA não encontrada.' };
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
+    if (iCOD < 0 || iEND < 0) return { ok: false, mensagem: 'Coluna Endereço não encontrada no Cadastro_PA.' };
+    const rowIdx = data.slice(1).findIndex(r => String(r[iCOD]||'').trim() === codigo);
+    if (rowIdx < 0) return { ok: false, mensagem: `Item PA '${codigo}' não encontrado.` };
+    sh.getRange(rowIdx + 2, iEND + 1).setValue(novoEndereco);
+    return { ok: true, mensagem: 'Endereço PA atualizado!' };
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -1721,16 +1692,12 @@ function prepararBaixaInsumos(codigoPA, qtdePABaixado) {
     if (!itensEst.length)
       return { ok: true, itens: [], aviso: `Nenhum insumo cadastrado na Estrutura de Produtos para ${cod}.` };
 
-    // ── Leitura 2: Movimento (saldos) ─────────────────────────────────────
-    const shMov    = _sh(NOME_ABA_MOVIMENTO);
-    if (!shMov) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
-    const dadosMov = shMov.getDataRange().getValues();
-    const saldosMap= _saldosEmMemoria(dadosMov, dadosMov[0]);
-    const saldoFn  = (c) => (saldosMap[c]||[]).reduce((s,e) => s + e.saldo, 0);
+    // ── Leitura 2: ESTOQUE_ATUAL de todos os insumos do Cadastro ──────────
+    const saldosMap = _mapaEstoqueAtualCadastro(NOME_ABA_CADASTRO);
 
     const itens = itensEst.map(item => {
       const qtdeNecessaria = item.qtdeUtilizada * qtde;
-      const saldoAtual     = saldoFn(item.codigoInsumo);
+      const saldoAtual     = saldosMap[item.codigoInsumo] || 0;
       return { ...item, qtdeNecessaria, saldoAtual, suficiente: saldoAtual >= qtdeNecessaria };
     });
 
@@ -1763,8 +1730,8 @@ function gravarBaixaInsumos(itens, dadosBase) {
         return { ok: true, gravados: 0, jaGravado: true, avisos: [] };
     }
 
-    const saldosMap = _saldosEmMemoria(dadosSh, header);
-    const saldoDisp = (c) => (saldosMap[c]||[]).reduce((s,e) => s + e.saldo, 0);
+    const saldosMap   = _mapaEstoqueAtualCadastro(NOME_ABA_CADASTRO);
+    const enderecoMap = _mapaEnderecoCadastro();
     const mapa      = _mapaStatusCadastro();
     const agora     = new Date();
     const avisos    = [];
@@ -1775,24 +1742,20 @@ function gravarBaixaInsumos(itens, dadosBase) {
       if (!cod) continue;
       if (mapa[cod] === undefined) { avisos.push(`'${cod}' não cadastrado — pulado.`); continue; }
       if (mapa[cod] === 'INATIVO')  { avisos.push(`'${cod}' INATIVO — pulado.`); continue; }
-      const saldo = saldoDisp(cod);
+      const saldo = saldosMap[cod] || 0;
       if (saldo <= 0) { avisos.push(`Sem saldo para '${cod}' — pulado.`); continue; }
       const qtde = Math.min(Number(it.qtdeBaixar), saldo);
       if (qtde < Number(it.qtdeBaixar)) avisos.push(`Saldo insuficiente '${cod}': necessário ${it.qtdeBaixar}, disponível ${saldo}.`);
 
-      const enderecos = saldosMap[cod] || [];
-      const dist = _distribuirPorEndereco(enderecos, qtde) || [{ endereco:'', qtde }];
-      for (const { endereco, qtde: q } of dist) {
-        linhas.push(_montarLinhaMovimento(header, {
-          id: Utilities.getUuid().substring(0,8), data: agora,
-          tipo: 'SAIDA', codigo: cod, descricao: it.descricao||'', qtde: q,
-          endereco, op: dadosBase.op||'',
-          obs: `Baixa insumos via PA — OP: ${dadosBase.op||''}`,
-          usuario: dadosBase.usuario||'', computer: dadosBase.computer||'',
-          localizacao: dadosBase.localizacao||'', ip: dadosBase.ip||'',
-          qrcode:'', chave: chaveIdem,
-        }));
-      }
+      linhas.push(_montarLinhaMovimento(header, {
+        id: Utilities.getUuid().substring(0,8), data: agora,
+        tipo: 'SAIDA', codigo: cod, descricao: it.descricao||'', qtde,
+        endereco: enderecoMap[cod]||'', op: dadosBase.op||'',
+        obs: `Baixa insumos via PA — OP: ${dadosBase.op||''}`,
+        usuario: dadosBase.usuario||'', computer: dadosBase.computer||'',
+        localizacao: dadosBase.localizacao||'', ip: dadosBase.ip||'',
+        qrcode:'', chave: chaveIdem,
+      }));
     }
 
     if (!linhas.length) return { ok: true, gravados: 0, avisos };
