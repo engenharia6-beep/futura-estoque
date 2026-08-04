@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @28 | Frontend: `d1d73ff`+**
+**GAS ativo: @28 | Frontend: `b0e2198`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
