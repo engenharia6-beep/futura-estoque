@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @34 | Frontend: `8b559b0`+**
+**GAS ativo: @35 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -104,6 +104,11 @@ deploys no fim deste arquivo.
   de 6 leituras completas de planilha por chamada para **1 só** (a própria
   OPS). Testado ao vivo: URLs de foto idênticas, byte a byte, ao resultado
   anterior
+- `listarCadastro`/`listarCadastroPA` ganham cache de 30s via
+  `CacheService` (ver "Lembretes técnicos" — como o resultado passa dos
+  100KB por chave, é guardado em pedaços/chunks). Testado ao vivo: segunda
+  chamada dentro da janela de 30s cai de ~4.8s pra ~1.8s (Insumos) e de
+  ~3.2s pra ~1.4s (PA), com o mesmo resultado byte a byte
 
 **Layout mobile (novo — 2026-08-03)**
 - Lista de OPs: coluna de foto/Pedido-OP-Origem encolhe em telas ≤480px;
@@ -240,6 +245,18 @@ código.
   lê a foto direto dessa coluna, sem cruzar com Cadastro/Cadastro_PA. Se o
   cabeçalho for renomeado, `fotoUrl` volta vazio nas OPs (os cards ainda
   funcionam, só ficam sem imagem).
+- **Cache de 30s em `listarCadastro`/`listarCadastroPA`** (`CacheService`,
+  chave `listarCadastro_<FILTRO>` / `listarCadastroPA_<FILTRO>`, guardada em
+  pedaços porque o resultado passa do limite de 100KB por chave do
+  `CacheService`) — **não é invalidado nos writes**. Depois de editar um
+  item, mudar endereço, ou qualquer movimento que altere `ESTOQUE_ATUAL`, a
+  lista de Insumos/PA pode levar até 30s pra refletir a mudança. Isso é
+  intencional (mantém o código simples, sem ter que invalidar cache em
+  cada função de gravação) — as validações de saldo na hora de gravar
+  (`obterSaldo`/`obterSaldoPA`, checagens dentro de `gravarMovimento` etc.)
+  **não usam esse cache**, continuam sempre lendo a planilha na hora, então
+  a integridade dos dados não é afetada — só a exibição da lista pode
+  atrasar um pouco.
 
 ---
 
@@ -294,4 +311,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @31 | fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
 | @32 | perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |
 | @33 | perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
-| @34 | ✅ **ATIVO** — fix: remove QR code e saldo dos cartões de Insumo/PA — etiquetas passam a ser só pra identificação |
+| @34 | fix: remove QR code e saldo dos cartões de Insumo/PA — etiquetas passam a ser só pra identificação |
+| @35 | ✅ **ATIVO** — perf: cache de 30s (CacheService, em chunks) para listarCadastro/listarCadastroPA |

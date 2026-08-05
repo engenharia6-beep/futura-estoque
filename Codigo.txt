@@ -195,6 +195,43 @@ function _mapaEstoqueAtualCadastro(nomeAba) {
   } catch(e) { return {}; }
 }
 
+// ── Cache de listas (CacheService) ──────────────────────────────────────────
+// CacheService tem limite de 100KB POR CHAVE. Listas de Insumos/PA
+// (976/446 itens) passam disso facilmente, então guardamos em pedaços
+// (chunks) de string e remontamos na leitura. TTL curto (segundos) —
+// não invalidamos no write, só aceitamos que a lista pode ficar até
+// TTL segundos desatualizada após alguém editar algo. obterSaldo/
+// obterSaldoPA (usados nas validações de gravação) NÃO usam esse cache
+// — continuam sempre lendo a planilha na hora.
+const _CACHE_CHUNK = 40000; // chars por chave, com margem sobre o limite de 100KB
+function _cacheGetLista(key) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const n = Number(cache.get(key + '_n') || 0);
+    if (!n) return null;
+    const chaves = [];
+    for (let i = 0; i < n; i++) chaves.push(key + '_' + i);
+    const partes = cache.getAll(chaves);
+    let json = '';
+    for (let i = 0; i < n; i++) {
+      const p = partes[key + '_' + i];
+      if (p == null) return null; // pedaço faltando/expirado — trata como cache miss
+      json += p;
+    }
+    return JSON.parse(json);
+  } catch(e) { return null; }
+}
+function _cacheSetLista(key, valor, ttlSegundos) {
+  try {
+    const json = JSON.stringify(valor);
+    const n = Math.max(1, Math.ceil(json.length / _CACHE_CHUNK));
+    const mapa = {};
+    for (let i = 0; i < n; i++) mapa[key + '_' + i] = json.substring(i * _CACHE_CHUNK, (i + 1) * _CACHE_CHUNK);
+    mapa[key + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(mapa, ttlSegundos);
+  } catch(e) {} // se a gravação do cache falhar, segue sem cache — não é crítico
+}
+
 function _verificarGravacao(sh, ids, linhasAntes) {
   try {
     SpreadsheetApp.flush();
@@ -507,6 +544,10 @@ function alterarSenha(nomeUsuario, senhaAtual, senhaNova) {
 function listarItensCadastro(filtroSituacao) {
   try {
     const filtro = filtroSituacao ? String(filtroSituacao).trim().toUpperCase() : 'ATIVO';
+    const cacheKey = 'listarCadastro_' + filtro;
+    const cached = _cacheGetLista(cacheKey);
+    if (cached) return cached;
+
     const sh = _sh(NOME_ABA_CADASTRO);
     if (!sh) return { ok: false, mensagem: 'Aba Cadastro não encontrada.' };
     const data = sh.getDataRange().getValues();
@@ -536,7 +577,7 @@ function listarItensCadastro(filtroSituacao) {
     const g = (r, i) => i >= 0 && i < r.length ? String(r[i] ?? '') : '';
     const n = (r, i) => i >= 0 && i < r.length ? Number(r[i] || 0) : 0;
 
-    return data.slice(1)
+    const resultado = data.slice(1)
       .filter(r => {
         if (g(r, iCodigo).trim() === '') return false;
         const sit = g(r, iSituacao).trim().toUpperCase();
@@ -566,6 +607,8 @@ function listarItensCadastro(filtroSituacao) {
         precoBRL:       n(r, iPrecoBRL),
         peso:           n(r, iPeso),
       }));
+    _cacheSetLista(cacheKey, resultado, 30);
+    return resultado;
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
@@ -642,6 +685,10 @@ function _obterCamposComFormula(nomeAba, codigo) {
 function listarItensCadastroPA(filtroSituacao) {
   try {
     const filtro = filtroSituacao ? String(filtroSituacao).trim().toUpperCase() : 'ATIVO';
+    const cacheKey = 'listarCadastroPA_' + filtro;
+    const cached = _cacheGetLista(cacheKey);
+    if (cached) return cached;
+
     const sh     = _sh(NOME_ABA_CADASTRO_PA);
     if (!sh) return { ok: false, mensagem: 'Aba Cadastro_PA não encontrada.' };
     const data = sh.getDataRange().getValues();
@@ -665,7 +712,7 @@ function listarItensCadastroPA(filtroSituacao) {
     const g = (r, i) => i >= 0 && i < r.length ? String(r[i] ?? '') : '';
     const n = (r, i) => i >= 0 && i < r.length ? Number(r[i] || 0) : 0;
 
-    return data.slice(1)
+    const resultado = data.slice(1)
       .filter(r => {
         if (g(r, iCodigo).trim() === '') return false;
         const sit = g(r, iSituacao).trim().toUpperCase();
@@ -689,6 +736,8 @@ function listarItensCadastroPA(filtroSituacao) {
         precoUSD:     n(r, iUSD),
         precoBRL:     n(r, iBRL),
       }));
+    _cacheSetLista(cacheKey, resultado, 30);
+    return resultado;
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
