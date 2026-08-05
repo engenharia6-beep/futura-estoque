@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @31 | Frontend: `8b559b0`+**
+**GAS ativo: @32 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -94,6 +94,11 @@ deploys no fim deste arquivo.
 - `prepararEListarBOM` troca `Utilities.sleep(3000)` fixo por polling curto
   (300ms, sai assim que a BOM estabiliza) — mesmo teto de espera, mas sai
   bem antes na maioria dos casos
+- `listarOPS` lê a coluna `PAGO` da própria aba OPS (fórmula
+  `ARRAYFORMULA`/`COUNTIF`, ver "Lembretes técnicos") em vez de escanear
+  Movimento e Movimento_PA inteiros pra descobrir quais OPs já foram pagas
+  — chamada toda vez que a tela de OPs abre + a cada 5 min de auto-refresh,
+  então esse era um dos pontos mais quentes
 
 **Layout mobile (novo — 2026-08-03)**
 - Lista de OPs: coluna de foto/Pedido-OP-Origem encolhe em telas ≤480px;
@@ -219,6 +224,12 @@ código.
 - Após push do frontend: `sessionStorage.clear(); caches.keys().then(k=>k.forEach(c=>caches.delete(c))); location.reload(true);`
 - CSS `.modal-overlay` é sensível — usar edições cirúrgicas, nunca substituição em bloco
 - `sw.js` é network-first (busca a rede antes do cache) — não deveria precisar do passo acima na maioria dos casos, mas ajuda se a PWA parecer "travada" numa versão antiga
+- **Aba OPS depende da coluna `PAGO`** (adicionada em 2026-08-04) — fórmula:
+  `=ARRAYFORMULA(IF(D2:D="","",IF((COUNTIF(Movimento!E:E,D2:D)+COUNTIF(Movimento_PA!E:E,D2:D))>0,"PAGO","")))`
+  (coluna D = número da OP na própria OPS; coluna E = número da OP em
+  Movimento/Movimento_PA). Se essa coluna for apagada, renomeada, ou a
+  fórmula for removida, `listarOPS` deixa de detectar OPs pagas — o código
+  não escaneia mais Movimento/Movimento_PA como fallback.
 
 ---
 
@@ -270,4 +281,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @28 | feat: obterResumoDashboard, resumo leve do dashboard (só contagens, sem enviar itens completos) |
 | @29 | fix: troca temporária da impressora de cartão (PrintNode `75494109` → `75307275`) — Brother DCP-B7535DW com defeito, imprimindo em PDF por enquanto |
 | @30 | feat: imprimirFilaCartao(Insumo/PA) devolve o PDF em base64 pro frontend baixar localmente, além de tentar mandar pro PrintNode |
-| @31 | ✅ **ATIVO** — fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
+| @31 | fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
+| @32 | ✅ **ATIVO** — perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |

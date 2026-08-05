@@ -1285,24 +1285,6 @@ function listarOPS() {
     h.forEach((v,i) => { idx[String(v||'').trim().toUpperCase()] = i; });
     const get = (row, col) => col != null && col >= 0 ? String(row[col]||'').trim() : '';
 
-    // Coleta OPs que já têm movimento (pagas)
-    const opsPagas = new Set();
-    const _coletar = (nomeAba) => {
-      try {
-        const shM = _sh(nomeAba); if (!shM) return;
-        const rows = shM.getDataRange().getValues();
-        const hM   = rows[0];
-        const iOP  = hM.findIndex(v => { const k=_norm(v); return k==='op'||k==='n da op'; });
-        if (iOP<0) return;
-        for (let i=1; i<rows.length; i++) {
-          const op = String(rows[i][iOP]||'').trim();
-          if (op) opsPagas.add(op);
-        }
-      } catch(e) {}
-    };
-    _coletar(NOME_ABA_MOVIMENTO);
-    _coletar(NOME_ABA_MOVIMENTO_PA);
-
     // Mapa de fotos (PA e Insumos)
     const mapaFotos = {};
     const lerFotos  = (nomeAba, colCod, colFoto) => {
@@ -1333,6 +1315,10 @@ function listarOPS() {
     const iZPL     = idx['ZPL']        ?? -1;
     const iMetal   = idx['METALIZADA'] ?? -1;
     const iSilk    = idx['SILK']       ?? -1;
+    const iPago    = idx['PAGO']       ?? -1; // coluna com fórmula (ARRAYFORMULA/COUNTIF)
+                                               // que já verifica na planilha se a OP tem
+                                               // movimento — substitui escanear Movimento/
+                                               // Movimento_PA inteiros aqui no código
 
     return data.slice(1)
       .filter(r => {
@@ -1346,11 +1332,11 @@ function listarOPS() {
         const isPA   = origem === 'PA';
         const posicaoPlanilha = get(r, iPosicao).toUpperCase();
 
-        // Estado: PAGO se já tem movimento, EM_BAIXA se planilha diz, senão ABERTA
+        // Estado: PAGO se a coluna PAGO (fórmula) diz, EM_BAIXA se planilha diz, senão ABERTA
         let estado;
-        if (opsPagas.has(opNum))          estado = 'PAGO';
-        else if (posicaoPlanilha === 'EM BAIXA') estado = 'EM_BAIXA';
-        else                               estado = 'ABERTA';
+        if (get(r, iPago).toUpperCase() === 'PAGO') estado = 'PAGO';
+        else if (posicaoPlanilha === 'EM BAIXA')    estado = 'EM_BAIXA';
+        else                                         estado = 'ABERTA';
 
         return {
           op:       opNum,
