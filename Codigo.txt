@@ -1285,25 +1285,9 @@ function listarOPS() {
     h.forEach((v,i) => { idx[String(v||'').trim().toUpperCase()] = i; });
     const get = (row, col) => col != null && col >= 0 ? String(row[col]||'').trim() : '';
 
-    // Mapa de fotos (PA e Insumos)
-    const mapaFotos = {};
-    const lerFotos  = (nomeAba, colCod, colFoto) => {
-      try {
-        const shF = _sh(nomeAba); if (!shF) return;
-        const d   = shF.getDataRange().getValues(), hF = d[0];
-        const iC  = _idxCol(hF, colCod), iF = _idxCol(hF, colFoto);
-        if (iC < 0 || iF < 0) return;
-        d.slice(1).forEach(r => {
-          const c = String(r[iC]||'').trim();
-          if (c && !mapaFotos[c]) mapaFotos[c] = String(r[iF]||'').trim();
-        });
-      } catch(e) {}
-    };
-    lerFotos(NOME_ABA_CADASTRO_PA, 'CÓDIGO', 'FOTO_SHEETS');
-    lerFotos(NOME_ABA_CADASTRO_PA, 'CÓDIGO', 'Endereço_Foto');
-    lerFotos(NOME_ABA_CADASTRO,    'CÓDIGO', 'Endereço_Foto');
-
     // Índices das colunas — compatível com nomes maiúsculos/minúsculos
+    const iFoto    = idx['FOTO'] ?? -1; // foto já mora na própria OPS — sem
+                                        // precisar ler Cadastro/Cadastro_PA
     const iOP      = idx['OP']      ?? idx['N_OP']     ?? -1;
     const iPedido  = idx['PEDIDO']  ?? idx['N_PEDIDO'] ?? -1;
     const iCodigo  = idx['CODIGO']  ?? idx['CÓDIGO']   ?? -1;
@@ -1351,7 +1335,7 @@ function listarOPS() {
           zpl:      get(r, iZPL),
           zplMetal: get(r, iMetal),
           silk:     get(r, iSilk),
-          fotoUrl:  mapaFotos[codigo] || '',
+          fotoUrl:  get(r, iFoto),
         };
       });
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }

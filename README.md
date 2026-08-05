@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @32 | Frontend: `8b559b0`+**
+**GAS ativo: @33 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -99,6 +99,11 @@ deploys no fim deste arquivo.
   Movimento e Movimento_PA inteiros pra descobrir quais OPs já foram pagas
   — chamada toda vez que a tela de OPs abre + a cada 5 min de auto-refresh,
   então esse era um dos pontos mais quentes
+- `listarOPS` também lê a foto direto da coluna `FOTO` da própria aba OPS,
+  em vez de cruzar código-a-código com Cadastro/Cadastro_PA — a função foi
+  de 6 leituras completas de planilha por chamada para **1 só** (a própria
+  OPS). Testado ao vivo: URLs de foto idênticas, byte a byte, ao resultado
+  anterior
 
 **Layout mobile (novo — 2026-08-03)**
 - Lista de OPs: coluna de foto/Pedido-OP-Origem encolhe em telas ≤480px;
@@ -230,6 +235,10 @@ código.
   Movimento/Movimento_PA). Se essa coluna for apagada, renomeada, ou a
   fórmula for removida, `listarOPS` deixa de detectar OPs pagas — o código
   não escaneia mais Movimento/Movimento_PA como fallback.
+- **Aba OPS depende da coluna `FOTO`** (coluna A, já existia) — `listarOPS`
+  lê a foto direto dessa coluna, sem cruzar com Cadastro/Cadastro_PA. Se o
+  cabeçalho for renomeado, `fotoUrl` volta vazio nas OPs (os cards ainda
+  funcionam, só ficam sem imagem).
 
 ---
 
@@ -282,4 +291,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @29 | fix: troca temporária da impressora de cartão (PrintNode `75494109` → `75307275`) — Brother DCP-B7535DW com defeito, imprimindo em PDF por enquanto |
 | @30 | feat: imprimirFilaCartao(Insumo/PA) devolve o PDF em base64 pro frontend baixar localmente, além de tentar mandar pro PrintNode |
 | @31 | fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
-| @32 | ✅ **ATIVO** — perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |
+| @32 | perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |
+| @33 | ✅ **ATIVO** — perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
