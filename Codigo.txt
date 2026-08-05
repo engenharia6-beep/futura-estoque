@@ -1809,7 +1809,6 @@ function imprimirFilaCartaoInsumo(lista) {
     const iDescricao= _idxCol(header, 'DESCRIÇÃO');
     const iObs      = _idxCol(header, 'obs');
     const iEndereco = _idxCol(header, 'Endereço');
-    const iEstAtual = _idxCol(header, 'ESTOQUE_ATUAL');
     const mapaProd  = {};
     data.slice(1).forEach(r => {
       const cod = String(r[iCodigo] || '').trim();
@@ -1819,7 +1818,6 @@ function imprimirFilaCartaoInsumo(lista) {
         detalhe:  iDescricao >= 0 ? String(r[iDescricao] || '') : cod,
         obs:      iObs       >= 0 ? String(r[iObs]       || '') : '',
         endereco: iEndereco  >= 0 ? String(r[iEndereco]  || '') : '',
-        saldo:    iEstAtual  >= 0 ? Number(r[iEstAtual]   || 0) : 0,
       };
     });
 
@@ -1832,9 +1830,8 @@ function imprimirFilaCartaoInsumo(lista) {
       const dadosFinal = {
         img:      prod.img ? _buscarImagemDriveBase64(prod.img) : '',
         logo:     logoBase64,
-        qrcode:   _gerarQRCode('@' + item.codigo),
         detalhe:  prod.detalhe || item.codigo,
-        enderecos:(prod.endereco || '—') + ' : ' + prod.saldo,
+        enderecos:prod.endereco || '—',
         obs:      prod.obs || '',
         codigo:   item.codigo,
       };
@@ -1889,7 +1886,6 @@ function imprimirFilaCartaoPA(lista) {
     const iDesc     = _idxCol(header, 'DESCRIÇÃO') >= 0 ? _idxCol(header, 'DESCRIÇÃO') : _idxCol(header, 'DESCRICAO');
     const iEndereco = _idxCol(header, 'ENDEREÇO_PA') >= 0 ? _idxCol(header, 'ENDEREÇO_PA') : _idxCol(header, 'Endereço');
     const iObs      = _idxCol(header, 'obs');
-    const iEstAtual = _idxCol(header, 'ESTOQUE_ATUAL');
     const mapaProd  = {};
     data.slice(1).forEach(r => {
       const cod = String(r[iCodigo] || '').trim();
@@ -1899,7 +1895,6 @@ function imprimirFilaCartaoPA(lista) {
         detalhe:  iDesc     >= 0 ? String(r[iDesc]     || '') : cod,
         endereco: iEndereco >= 0 ? String(r[iEndereco] || '') : '',
         obs:      iObs      >= 0 ? String(r[iObs]      || '') : '',
-        saldo:    iEstAtual >= 0 ? Number(r[iEstAtual]  || 0) : 0,
       };
     });
 
@@ -1912,9 +1907,8 @@ function imprimirFilaCartaoPA(lista) {
       const dadosFinal = {
         img:      prod.img ? _buscarImagemDriveBase64(prod.img) : '',
         logo:     logoBase64,
-        qrcode:   _gerarQRCode('@' + item.codigo),
         detalhe:  prod.detalhe || item.codigo,
-        enderecos:(prod.endereco || '—') + ' : ' + prod.saldo,
+        enderecos:prod.endereco || '—',
         obs:      prod.obs || '',
         codigo:   item.codigo,
       };
@@ -1976,17 +1970,6 @@ function _buscarImagemDriveBase64(ref) {
     return 'data:' + mime + ';base64,' + b64;
   } catch(e) {
     Logger.log('Erro _buscarImagemDriveBase64(' + ref + '): ' + e.message);
-    return '';
-  }
-}
-
-function _gerarQRCode(texto) {
-  try {
-    const url  = 'https://chart.googleapis.com/chart?chs=150x150&cht=qr&chl=' + encodeURIComponent(texto);
-    const blob = UrlFetchApp.fetch(url).getBlob();
-    return 'data:image/png;base64,' + Utilities.base64Encode(blob.getBytes());
-  } catch(e) {
-    Logger.log('Erro _gerarQRCode(' + texto + '): ' + e.message);
     return '';
   }
 }

@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @33 | Frontend: `8b559b0`+**
+**GAS ativo: @34 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -155,9 +155,10 @@ deploys no fim deste arquivo.
 - Botões +G / +P direto nos cards, badge de contagem
 - Botões Metal / OP nas OPs com impressoras corretas
 - Impressão ZPL avulsa
-- Cartão (G/Grade A4) mostra "Endereço : Saldo" montado na hora a partir do
+- Cartão (G/Grade A4) mostra só o **Endereço** (lido na hora do
   Cadastro/Cadastro_PA — não imprime mais valor antigo/sujo que estivesse
-  na célula de Endereço
+  na célula) — **sem saldo e sem QR code** (2026-08-04: etiqueta passou a
+  ser só pra identificação, não precisa mais dessas duas informações)
 - Impressora de cartão temporariamente trocada pra uma impressora PDF do
   PrintNode (Brother "Copiadora 1" com defeito — ver "Assuntos em aberto")
 - Ao mandar imprimir cartão, o PDF também baixa direto no navegador de
@@ -292,4 +293,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @30 | feat: imprimirFilaCartao(Insumo/PA) devolve o PDF em base64 pro frontend baixar localmente, além de tentar mandar pro PrintNode |
 | @31 | fix: cartão mostra "Endereço : Saldo" de verdade (lido do Cadastro/Cadastro_PA na hora), em vez do dado antigo/sujo que ficava no campo Endereço |
 | @32 | perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |
-| @33 | ✅ **ATIVO** — perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
+| @33 | perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
+| @34 | ✅ **ATIVO** — fix: remove QR code e saldo dos cartões de Insumo/PA — etiquetas passam a ser só pra identificação |

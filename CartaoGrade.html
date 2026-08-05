@@ -84,13 +84,6 @@
     flex: 1;
   }
 
-  .qr-mini {
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    margin-left: 3px;
-  }
-
   /* LADO DIREITO */
   .lado-direito {
     width: 58%;
@@ -202,9 +195,6 @@
               <div class="texto-local" style="font-size: <?= end1FontSize ?>;">
                 <?!= end1Html ?>
               </div>
-              <? if (item1.qrcode) { ?>
-                <img src="<?!= item1.qrcode ?>" class="qr-mini" />
-              <? } ?>
             </div>
           </div>
           <div class="lado-direito">
@@ -238,9 +228,6 @@
                 <div class="texto-local" style="font-size: <?= end2FontSize ?>;">
                   <?!= end2Html ?>
                 </div>
-                <? if (item2.qrcode) { ?>
-                  <img src="<?!= item2.qrcode ?>" class="qr-mini" />
-                <? } ?>
               </div>
             </div>
             <div class="lado-direito">

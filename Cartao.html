@@ -41,16 +41,6 @@
       object-fit: contain;
     }
 
-    .qr-flutuante {
-      position: absolute;
-      bottom: 5px;
-      right: 5px;
-      width: 70px;
-      height: 70px;
-      background-color: white;
-      padding: 2px;
-    }
-
     /* --- LADO DIREITO (DADOS) --- */
     .col-direita {
       width: 60%;
@@ -162,10 +152,6 @@
           <img src="<?!= dados.img ?>" class="foto-produto" />
         <? } else { ?>
           <span style="color:#ccc;font-size:13px;text-align:center;">SEM FOTO</span>
-        <? } ?>
-
-        <? if (dados.qrcode) { ?>
-          <img src="<?!= dados.qrcode ?>" class="qr-flutuante" />
         <? } ?>
       </div>
 
