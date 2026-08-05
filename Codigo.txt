@@ -195,6 +195,36 @@ function _mapaEstoqueAtualCadastro(nomeAba) {
   } catch(e) { return {}; }
 }
 
+// Lê Cadastro/Cadastro_PA UMA VEZ e devolve situação + endereço + saldo por
+// código — usado nas funções de gravação (gravarMovimento(PA), lote,
+// gravarBaixaInsumos), que antes chamavam _mapaStatusCadastro* +
+// _mapaEnderecoCadastro* + obterSaldo*/_mapaEstoqueAtualCadastro*
+// separadamente, relendo a mesma aba 2-3x na mesma chamada.
+function _mapaCadastroInfo(nomeAba) {
+  try {
+    const sh = _sh(nomeAba);
+    if (!sh) return {};
+    const data = sh.getDataRange().getValues();
+    const h    = data[0];
+    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iSIT = _idxCol(h, 'Situação');
+    const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
+    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const mapa = {};
+    if (iCOD < 0) return mapa;
+    for (let i = 1; i < data.length; i++) {
+      const cod = String(data[i][iCOD]||'').trim();
+      if (!cod) continue;
+      mapa[cod] = {
+        situacao: iSIT >= 0 ? String(data[i][iSIT]||'').trim().toUpperCase() : '',
+        endereco: iEND >= 0 ? String(data[i][iEND]||'').trim() : '',
+        saldo:    iEA  >= 0 ? Number(data[i][iEA]||0) : 0,
+      };
+    }
+    return mapa;
+  } catch(e) { return {}; }
+}
+
 // ── Cache de listas (CacheService) ──────────────────────────────────────────
 // CacheService tem limite de 100KB POR CHAVE. Listas de Insumos/PA
 // (976/446 itens) passam disso facilmente, então guardamos em pedaços
@@ -912,9 +942,12 @@ function gravarMovimento(dados) {
   try {
     const codigo = String(dados.codigo || '').trim();
     if (!codigo) return { ok: false, mensagem: 'Código não informado.' };
-    const mapa = _mapaStatusCadastro();
-    if (mapa[codigo] === undefined) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
-    if (mapa[codigo] === 'INATIVO')  return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
+    // 1 leitura só do Cadastro: situação + endereço + saldo (antes eram
+    // 3 leituras separadas — _mapaStatusCadastro + _mapaEnderecoCadastro + obterSaldo)
+    const infoCad = _mapaCadastroInfo(NOME_ABA_CADASTRO);
+    const itemCad = infoCad[codigo];
+    if (itemCad === undefined) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
+    if (itemCad.situacao === 'INATIVO')  return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
     const sh = _sh(NOME_ABA_MOVIMENTO);
     if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
     const dadosSh     = sh.getDataRange().getValues();
@@ -930,9 +963,9 @@ function gravarMovimento(dados) {
     const isSaida     = String(dados.tipo||'').toUpperCase() === 'SAIDA';
     const qtde        = Number(dados.qtde || 0);
     const agora       = new Date();
-    const endereco    = _mapaEnderecoCadastro()[codigo] || '';
+    const endereco    = itemCad.endereco || '';
     if (isSaida) {
-      const saldoTotal = obterSaldo(codigo);
+      const saldoTotal = itemCad.saldo;
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
     }
     const id  = Utilities.getUuid().substring(0,8);
@@ -979,15 +1012,17 @@ function gravarMovimentosEmLote(movimentos) {
       }
     }
 
-    const saldosMap   = _saldosEmMemoria(dadosSh, header);
-    const enderecoMap = _mapaEnderecoCadastro();
-    const mapa = _mapaStatusCadastro();
+    const saldosMap = _saldosEmMemoria(dadosSh, header);
+    // 1 leitura só do Cadastro: situação + endereço (antes eram 2 leituras
+    // separadas — _mapaEnderecoCadastro + _mapaStatusCadastro)
+    const infoCad = _mapaCadastroInfo(NOME_ABA_CADASTRO);
     const erros = [], ids = [], agora = new Date();
     for (const mov of movimentos) {
       const cod = String(mov.codigo||'').trim();
       if (!cod) { erros.push('Código ausente.'); continue; }
-      if (mapa[cod] === undefined) { erros.push(`'${cod}' não cadastrado.`); continue; }
-      if (mapa[cod] === 'INATIVO')  { erros.push(`'${cod}' INATIVO.`); continue; }
+      const item = infoCad[cod];
+      if (item === undefined) { erros.push(`'${cod}' não cadastrado.`); continue; }
+      if (item.situacao === 'INATIVO')  { erros.push(`'${cod}' INATIVO.`); continue; }
       if (String(mov.tipo||'').toUpperCase() === 'SAIDA') {
         const s = saldosMap[cod]||0;
         if (Number(mov.qtde||0) > s) erros.push(`Saldo insuficiente '${cod}': disponível ${s}.`);
@@ -999,7 +1034,7 @@ function gravarMovimentosEmLote(movimentos) {
       const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
       const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', localizacao: mov.localizacao||'', computer: mov.computer||'', ip: mov.ip||'' };
       const id = Utilities.getUuid().substring(0,8); ids.push(id);
-      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: enderecoMap[cod]||'' })));
+      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: (infoCad[cod]||{}).endereco || '' })));
     }
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
@@ -1098,10 +1133,11 @@ function gravarMovimentoPA(dados) {
     if (!codigo) return { ok: false, mensagem: 'Código PA não informado.' };
     if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
 
-    // ── Leitura 1: Cadastro_PA (validação) ───────────────────────────────
-    const mapa = _mapaStatusCadastroPA();
-    if (mapa[codigo] === undefined) return { ok: false, mensagem: `Item PA '${codigo}' não encontrado.` };
-    if (mapa[codigo] === 'INATIVO')  return { ok: false, mensagem: `Item PA '${codigo}' está INATIVO.` };
+    // ── Leitura 1: Cadastro_PA — situação + endereço numa leitura só ──────
+    const infoCadPA = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
+    const itemCadPA = infoCadPA[codigo];
+    if (itemCadPA === undefined) return { ok: false, mensagem: `Item PA '${codigo}' não encontrado.` };
+    if (itemCadPA.situacao === 'INATIVO')  return { ok: false, mensagem: `Item PA '${codigo}' está INATIVO.` };
 
     // ── Leitura 2: Movimento_PA (saldo + idempotência) ────────────────────
     const shPA    = _sh(NOME_ABA_MOVIMENTO_PA);
@@ -1136,7 +1172,7 @@ function gravarMovimentoPA(dados) {
     const saldosPA   = _saldosEmMemoria(dadosPA, headerPA);
     const linhasAntes= dadosPA.length;
     const agora      = new Date();
-    const endereco   = _mapaEnderecoCadastroPA()[codigo] || '';
+    const endereco   = itemCadPA.endereco || '';
     const base       = {
       data: agora, qrcode: dados.qrcode||'', tipo: dados.tipo||'',
       op: dados.op||'', codigo, descricao: dados.descricao||'',
@@ -1197,15 +1233,17 @@ function gravarMovimentosEmLotePA(movimentos) {
       }
     }
 
-    const saldosMap   = _saldosEmMemoria(dadosSh, header);
-    const enderecoMap = _mapaEnderecoCadastroPA();
-    const mapa = _mapaStatusCadastroPA();
+    const saldosMap = _saldosEmMemoria(dadosSh, header);
+    // 1 leitura só do Cadastro_PA: situação + endereço (antes eram 2
+    // leituras separadas — _mapaEnderecoCadastroPA + _mapaStatusCadastroPA)
+    const infoCad = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
     const erros = [], ids = [], agora = new Date();
     for (const mov of movimentos) {
       const cod = String(mov.codigo||'').trim();
       if (!cod) { erros.push('Código PA ausente.'); continue; }
-      if (mapa[cod]===undefined) { erros.push(`PA '${cod}' não cadastrado.`); continue; }
-      if (mapa[cod]==='INATIVO')  { erros.push(`PA '${cod}' INATIVO.`); continue; }
+      const item = infoCad[cod];
+      if (item === undefined) { erros.push(`PA '${cod}' não cadastrado.`); continue; }
+      if (item.situacao === 'INATIVO')  { erros.push(`PA '${cod}' INATIVO.`); continue; }
       if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
         const s = saldosMap[cod]||0;
         if (Number(mov.qtde||0) > s) erros.push(`Saldo PA insuficiente '${cod}': disponível ${s}.`);
@@ -1217,7 +1255,7 @@ function gravarMovimentosEmLotePA(movimentos) {
       const cod = String(mov.codigo||'').trim(), qtde = Number(mov.qtde||0);
       const base = { data: agora, qrcode: mov.qrcode||'', tipo: mov.tipo||'', op: mov.op||'', codigo: cod, descricao: mov.descricao||'', chave: mov.chave||'', obs: mov.obs||'', usuario: mov.usuario||'', computer: mov.computer||'', localizacao: mov.localizacao||'', ip: mov.ip||'' };
       const id = Utilities.getUuid().substring(0,8); ids.push(id);
-      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: enderecoMap[cod]||'' })));
+      linhas.push(_montarLinhaMovimento(header, Object.assign({}, base, { id, qtde, endereco: (infoCad[cod]||{}).endereco || '' })));
     }
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
@@ -1800,9 +1838,10 @@ function gravarBaixaInsumos(itens, dadosBase) {
         return { ok: true, gravados: 0, jaGravado: true, avisos: [] };
     }
 
-    const saldosMap   = _mapaEstoqueAtualCadastro(NOME_ABA_CADASTRO);
-    const enderecoMap = _mapaEnderecoCadastro();
-    const mapa      = _mapaStatusCadastro();
+    // 1 leitura só do Cadastro: situação + endereço + saldo (antes eram
+    // 3 leituras separadas — _mapaEstoqueAtualCadastro + _mapaEnderecoCadastro
+    // + _mapaStatusCadastro, cada uma relendo a aba inteira)
+    const infoCad   = _mapaCadastroInfo(NOME_ABA_CADASTRO);
     const agora     = new Date();
     const avisos    = [];
     const linhas    = []; // acumula todas as linhas para gravar em um único setValues
@@ -1810,9 +1849,10 @@ function gravarBaixaInsumos(itens, dadosBase) {
     for (const it of paraGravar) {
       const cod = String(it.codigoInsumo || it.codigo || '').trim();
       if (!cod) continue;
-      if (mapa[cod] === undefined) { avisos.push(`'${cod}' não cadastrado — pulado.`); continue; }
-      if (mapa[cod] === 'INATIVO')  { avisos.push(`'${cod}' INATIVO — pulado.`); continue; }
-      const saldo = saldosMap[cod] || 0;
+      const item = infoCad[cod];
+      if (item === undefined) { avisos.push(`'${cod}' não cadastrado — pulado.`); continue; }
+      if (item.situacao === 'INATIVO')  { avisos.push(`'${cod}' INATIVO — pulado.`); continue; }
+      const saldo = item.saldo || 0;
       if (saldo <= 0) { avisos.push(`Sem saldo para '${cod}' — pulado.`); continue; }
       const qtde = Math.min(Number(it.qtdeBaixar), saldo);
       if (qtde < Number(it.qtdeBaixar)) avisos.push(`Saldo insuficiente '${cod}': necessário ${it.qtdeBaixar}, disponível ${saldo}.`);
@@ -1820,7 +1860,7 @@ function gravarBaixaInsumos(itens, dadosBase) {
       linhas.push(_montarLinhaMovimento(header, {
         id: Utilities.getUuid().substring(0,8), data: agora,
         tipo: 'SAIDA', codigo: cod, descricao: it.descricao||'', qtde,
-        endereco: enderecoMap[cod]||'', op: dadosBase.op||'',
+        endereco: item.endereco||'', op: dadosBase.op||'',
         obs: `Baixa insumos via PA — OP: ${dadosBase.op||''}`,
         usuario: dadosBase.usuario||'', computer: dadosBase.computer||'',
         localizacao: dadosBase.localizacao||'', ip: dadosBase.ip||'',

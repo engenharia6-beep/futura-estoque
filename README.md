@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @35 | Frontend: `8b559b0`+**
+**GAS ativo: @36 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -109,6 +109,15 @@ deploys no fim deste arquivo.
   100KB por chave, é guardado em pedaços/chunks). Testado ao vivo: segunda
   chamada dentro da janela de 30s cai de ~4.8s pra ~1.8s (Insumos) e de
   ~3.2s pra ~1.4s (PA), com o mesmo resultado byte a byte
+- **Baixa de Insumos/PA mais rápida**: `gravarMovimento`, `gravarMovimentoPA`,
+  `gravarMovimentosEmLote(PA)` e `gravarBaixaInsumos` liam Cadastro/
+  Cadastro_PA 2-3 vezes cada (situação, endereço e saldo eram 3 funções
+  separadas, cada uma relendo a aba inteira) — `gravarBaixaInsumos` em
+  particular, chamada ao confirmar a Baixa via PA, foi de **3 leituras pra
+  1**. Novo helper `_mapaCadastroInfo` lê tudo de uma vez. Validado sem
+  gravar nada de verdade: forçando erro (saldo insuficiente/código
+  inexistente) nas 5 funções, a mensagem de erro bate com o saldo real do
+  `listarCadastro`
 
 **Layout mobile (novo — 2026-08-03)**
 - Lista de OPs: coluna de foto/Pedido-OP-Origem encolhe em telas ≤480px;
@@ -312,4 +321,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @32 | perf: listarOPS lê coluna PAGO (fórmula na planilha) em vez de escanear Movimento/Movimento_PA inteiros a cada chamada |
 | @33 | perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
 | @34 | fix: remove QR code e saldo dos cartões de Insumo/PA — etiquetas passam a ser só pra identificação |
-| @35 | ✅ **ATIVO** — perf: cache de 30s (CacheService, em chunks) para listarCadastro/listarCadastroPA |
+| @35 | perf: cache de 30s (CacheService, em chunks) para listarCadastro/listarCadastroPA |
+| @36 | ✅ **ATIVO** — perf: unifica leituras de Cadastro/Cadastro_PA nas funções de gravação (gravarMovimento(PA), lote, gravarBaixaInsumos) — de 2-3 leituras por chamada pra 1 |
