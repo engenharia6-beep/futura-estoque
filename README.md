@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @39 | Frontend: `1bd6f54`+**
+**GAS ativo: @39 | Frontend: `99f3f55`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,29 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-08-11
 
 ### ✅ Funcionando
+
+**Redesign do modal de detalhe — Insumo/PA (novo — 2026-08-11)**
+- Header compacto: código/nome/endereço à esquerda, saldo numa caixa
+  compacta à direita — substitui o bloco "Saldo total" grande centralizado
+- Removida a seção "Endereços" (lista) do modal — redundante com o modelo
+  de endereço único por item; o endereço agora aparece direto na linha do
+  header (`Endereço: G04A`)
+- As 5 ações (Entrada, Saída, Ajuste de Inventário, Transferir Código,
+  Alterar Endereço) viraram uma fileira compacta ícone+rótulo curto, sob o
+  título "Movimentos e Ajustes" — `overflow-x:auto` como fallback em telas
+  muito estreitas, mas cabe exatamente em 390px sem precisar rolar
+- "Fechar" virou link de texto na própria fileira, em vez de botão de
+  largura cheia no rodapé
+- Removida a fileira de impressão (Cartão G, Cartão P, ZPL avulso) do modal
+  de detalhe — os cards da lista de Insumos/PA já têm botões +G/+P
+  equivalentes (`adicionarFilaDireto`). `imprimirZPLDetalhe`/`adicionarFila`
+  ficaram sem chamador na UI, mas não foram apagadas do código
+- No PA, o espaço liberado vai pra "Estrutura de Insumos", que ganha mais
+  visibilidade sem precisar rolar
+- Validado com Playwright headless (viewport 390×844, iPhone 13 mini): sem
+  erros de console/página, dados de endereço/saldo carregando certo nos
+  dois modais. Preview visual publicado como artifact e aprovado pelo
+  usuário antes do commit
 
 **🔀 Transferência de Código (novo — 2026-08-11)**
 - Botão "🔀 Transferir Código" no detalhe de Insumo e de PA (ao lado de
