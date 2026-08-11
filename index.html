@@ -224,7 +224,6 @@
     .item-foto-placeholder{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
     .item-foto-placeholder.insumo{background:var(--ins-light)}
     .item-foto-placeholder.pa{background:var(--pa-light)}
-    .detalhe-header{padding:20px;display:flex;gap:16px;align-items:flex-start;border-bottom:1px solid var(--border)}
     .detalhe-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0}
     .detalhe-code{font-size:11px;font-family:var(--mono);color:var(--text-muted);margin-bottom:4px}
     .detalhe-name{font-size:17px;font-weight:700;line-height:1.3}
@@ -232,14 +231,18 @@
     .info-row{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border)}
     .info-row-label{font-size:12px;color:var(--text-muted)}
     .info-row-value{font-size:14px;font-weight:600}
-    .saldo-grande{padding:20px;text-align:center}
-    .saldo-numero{font-size:48px;font-weight:800;font-family:var(--mono);line-height:1}
-    .saldo-label{font-size:12px;color:var(--text-muted);margin-top:6px}
-    .enderecos-list{padding:0 20px;display:flex;flex-direction:column;gap:8px}
-    .endereco-row{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px}
-    .endereco-nome{font-size:13px;font-family:var(--mono)}
-    .endereco-saldo{font-size:14px;font-weight:700;font-family:var(--mono);color:var(--success)}
-    .acoes-detalhe{padding:20px;display:flex;flex-direction:column;gap:10px}
+    /* Header compacto do detalhe (Insumo/PA): código+nome+endereço à esquerda, saldo em caixa à direita */
+    .detalhe-header-compact{padding:16px 20px;display:flex;gap:12px;align-items:flex-start;justify-content:space-between;border-bottom:1px solid var(--border)}
+    .detalhe-endereco-linha{font-size:12px;color:var(--accent);font-family:var(--mono);font-weight:700;margin-top:6px}
+    .saldo-box{flex-shrink:0;text-align:center;border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;min-width:76px}
+    .saldo-box-numero{font-size:22px;font-weight:800;font-family:var(--mono);line-height:1;color:var(--text)}
+    .saldo-box-label{font-size:10px;color:var(--text-muted);margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+    /* Fileira de ações compactas (Entrada/Saída/Ajuste/Transferir/Endereço) + Fechar */
+    .acoes-compactas{display:flex;align-items:stretch;gap:4px;padding:4px 16px 16px;overflow-x:auto}
+    .acao-mini{flex:1 1 0;min-width:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:52px;border-radius:var(--radius-sm);border:1px solid transparent;font-size:9.5px;font-weight:700;white-space:nowrap;transition:opacity var(--transition)}
+    .acao-mini:hover{opacity:.85}
+    .acao-mini .acao-icone{font-size:16px;line-height:1}
+    .acao-fechar{flex-shrink:0;align-self:center;background:transparent;color:var(--text-muted);font-size:12px;font-weight:600;padding:0 2px}
 
     /* ── BOM table ── */
     .bom-table{width:100%;border-collapse:collapse;font-size:12px}
@@ -303,8 +306,6 @@
     .btn-imprimir-g{background:#1a73e8;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
     .btn-imprimir-p{background:#0f6e56;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
     .btn-limpar-fila{background:transparent;color:var(--text-muted);height:36px;padding:0 10px;border-radius:6px;font-size:12px}
-    .btn-add-g{background:rgba(26,115,232,.2);color:#60a5fa;height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700;border:1px solid rgba(26,115,232,.4)}
-    .btn-add-p{background:rgba(15,110,86,.2);color:#34d399;height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700;border:1px solid rgba(15,110,86,.4)}
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
@@ -493,31 +494,26 @@
     <div class="detalhe-foto-wrap foto-banner-clicavel" id="det-ins-foto-wrap" style="width:100%;height:180px;border-radius:0;border:none;border-bottom:1px solid var(--border);background:#1e2a2a" onclick="abrirLightboxWrap('det-ins-foto-wrap')">
       <div class="detalhe-foto-placeholder" id="det-ins-foto-placeholder" style="border-radius:0;font-size:64px;background:#1e2a2a">📦</div>
     </div>
-    <div class="detalhe-header" style="border-bottom:1px solid var(--border)">
-      <div>
+    <div class="detalhe-header-compact">
+      <div style="min-width:0">
         <div class="detalhe-code" id="det-ins-codigo"></div>
         <div class="detalhe-name" id="det-ins-nome"></div>
         <div class="detalhe-meta" id="det-ins-meta"></div>
+        <div class="detalhe-endereco-linha" id="det-ins-endereco-linha"></div>
+      </div>
+      <div class="saldo-box">
+        <div class="saldo-box-numero" id="det-ins-saldo">—</div>
+        <div class="saldo-box-label">Saldo Total</div>
       </div>
     </div>
-    <div class="saldo-grande">
-      <div class="saldo-numero" id="det-ins-saldo">—</div>
-      <div class="saldo-label">Saldo total</div>
-    </div>
-    <div class="section-header" style="padding-top:0"><span class="section-title">Endereços</span></div>
-    <div id="det-ins-enderecos" class="enderecos-list"></div>
-    <div class="acoes-detalhe">
-      <div style="display:flex;gap:8px;margin-bottom:2px">
-        <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
-        <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
-        <button class="btn btn-full btn-sm" style="background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.4);height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700" onclick="imprimirZPLDetalhe()">🏷️ ZPL</button>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="abrirMovimentoInsumo('ENTRADA')">➕ Registrar Entrada</button>
-      <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
-      <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('insumo')">⚖️ Ajuste de Inventário</button>
-      <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
-      <button class="btn btn-full" style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirTransferirCodigo('insumo')">🔀 Transferir Código</button>
-      <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
+    <div class="section-header" style="padding:14px 16px 4px"><span class="section-title">Movimentos e Ajustes</span></div>
+    <div class="acoes-compactas">
+      <button class="acao-mini" style="background:var(--accent);color:#fff" onclick="abrirMovimentoInsumo('ENTRADA')"><span class="acao-icone">➕</span>Entrada</button>
+      <button class="acao-mini" style="background:var(--danger);color:#fff" onclick="abrirMovimentoInsumo('SAIDA')"><span class="acao-icone">➖</span>Saída</button>
+      <button class="acao-mini" style="background:rgba(234,179,8,.15);color:#ca8a04;border-color:rgba(234,179,8,.35)" onclick="abrirAjusteInventario('insumo')"><span class="acao-icone">⚖️</span>Inventário</button>
+      <button class="acao-mini" style="background:rgba(124,58,237,.15);color:#a78bfa;border-color:rgba(124,58,237,.35)" onclick="abrirTransferirCodigo('insumo')"><span class="acao-icone">🔀</span>Transferir</button>
+      <button class="acao-mini" style="background:rgba(59,130,246,.15);color:#60a5fa;border-color:rgba(59,130,246,.35)" onclick="abrirAlterarEndereco()"><span class="acao-icone">📍</span>Endereço</button>
+      <button class="acao-fechar" onclick="fecharModal('modal-insumo')">Fechar</button>
     </div>
   </div>
 </div>
@@ -561,34 +557,29 @@
     <div class="detalhe-foto-wrap foto-banner-clicavel" id="det-pa-foto-wrap" style="width:100%;height:180px;border-radius:0;border:none;border-bottom:1px solid var(--border);background:#1e2a2a" onclick="abrirLightboxWrap('det-pa-foto-wrap')">
       <div class="detalhe-foto-placeholder" id="det-pa-foto-placeholder" style="border-radius:0;font-size:64px;background:#1e2a2a">🏭</div>
     </div>
-    <div class="detalhe-header" style="border-bottom:1px solid var(--border)">
-      <div>
+    <div class="detalhe-header-compact">
+      <div style="min-width:0">
         <div class="detalhe-code" id="det-pa-codigo"></div>
         <div class="detalhe-name" id="det-pa-nome"></div>
         <div class="detalhe-meta" id="det-pa-meta"></div>
+        <div class="detalhe-endereco-linha" id="det-pa-endereco-linha"></div>
+      </div>
+      <div class="saldo-box">
+        <div class="saldo-box-numero" id="det-pa-saldo">—</div>
+        <div class="saldo-box-label">Saldo Total</div>
       </div>
     </div>
-    <div class="saldo-grande">
-      <div class="saldo-numero" id="det-pa-saldo">—</div>
-      <div class="saldo-label">Saldo total</div>
+    <div class="section-header" style="padding:14px 16px 4px"><span class="section-title">Movimentos e Ajustes</span></div>
+    <div class="acoes-compactas">
+      <button class="acao-mini" style="background:var(--accent);color:#fff" onclick="abrirMovimentoPA('ENTRADA')"><span class="acao-icone">➕</span>Entrada</button>
+      <button class="acao-mini" style="background:var(--danger);color:#fff" onclick="abrirMovimentoPA('SAIDA')"><span class="acao-icone">➖</span>Baixa</button>
+      <button class="acao-mini" style="background:rgba(234,179,8,.15);color:#ca8a04;border-color:rgba(234,179,8,.35)" onclick="abrirAjusteInventario('pa')"><span class="acao-icone">⚖️</span>Inventário</button>
+      <button class="acao-mini" style="background:rgba(124,58,237,.15);color:#a78bfa;border-color:rgba(124,58,237,.35)" onclick="abrirTransferirCodigo('pa')"><span class="acao-icone">🔀</span>Transferir</button>
+      <button class="acao-mini" style="background:rgba(59,130,246,.15);color:#60a5fa;border-color:rgba(59,130,246,.35)" onclick="abrirAlterarEndereco()"><span class="acao-icone">📍</span>Endereço</button>
+      <button class="acao-fechar" onclick="fecharModal('modal-pa')">Fechar</button>
     </div>
-    <div class="section-header" style="padding-top:0"><span class="section-title">Endereços</span></div>
-    <div id="det-pa-enderecos" class="enderecos-list"></div>
     <div class="section-header"><span class="section-title">Estrutura de Insumos</span></div>
     <div id="det-pa-estrutura" class="item-list" style="margin-bottom:8px"></div>
-    <div class="acoes-detalhe">
-      <div style="display:flex;gap:8px;margin-bottom:2px">
-        <button class="btn btn-full btn-sm btn-add-g" onclick="adicionarFila('G')">🖨️ Cartão G</button>
-        <button class="btn btn-full btn-sm btn-add-p" onclick="adicionarFila('P')">🖨️ Cartão P</button>
-        <button class="btn btn-full btn-sm" style="background:rgba(124,58,237,.2);color:#a78bfa;border:1px solid rgba(124,58,237,.4);height:30px;padding:0 10px;border-radius:5px;font-size:11px;font-weight:700" onclick="imprimirZPLDetalhe()">🏷️ ZPL</button>
-      </div>
-      <button class="btn btn-primary btn-full" onclick="abrirMovimentoPA('ENTRADA')">➕ Registrar Entrada</button>
-      <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
-      <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('pa')">⚖️ Ajuste de Inventário</button>
-      <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
-      <button class="btn btn-full" style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirTransferirCodigo('pa')">🔀 Transferir Código</button>
-      <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
-    </div>
   </div>
 </div>
 
@@ -1256,7 +1247,7 @@ async function abrirDetalheInsumo(codigo) {
   document.getElementById('det-ins-nome').textContent   = it.descricao;
   document.getElementById('det-ins-meta').textContent   = [it.tipo, it.unidade].filter(Boolean).join(' · ');
   document.getElementById('det-ins-saldo').textContent  = '…';
-  document.getElementById('det-ins-enderecos').innerHTML = '<div style="padding:8px 0;color:var(--text-muted);font-size:13px">Carregando endereços...</div>';
+  document.getElementById('det-ins-endereco-linha').textContent = it.endereco ? `Endereço: ${it.endereco}` : '';
   // Reseta placeholder antes de abrir
   const wrap = document.getElementById('det-ins-foto-wrap');
   if (wrap) wrap.innerHTML = `<div class="detalhe-foto-placeholder" id="det-ins-foto-placeholder" style="border-radius:0;font-size:64px;background:#1e2a2a">📦</div>`;
@@ -1266,13 +1257,8 @@ async function abrirDetalheInsumo(codigo) {
   try {
     const res = await api('obterEnderecosSaldo', { codigo });
     document.getElementById('det-ins-saldo').textContent = res.saldo ?? 0;
-    const el = document.getElementById('det-ins-enderecos');
-    if (!res.enderecos?.length) { el.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:13px">Sem estoque em endereços.</div>'; return; }
-    el.innerHTML = res.enderecos.map(e => `
-      <div class="endereco-row">
-        <span class="endereco-nome">📍 ${esc(e.endereco)}</span>
-        <span class="endereco-saldo">${e.saldo}</span>
-      </div>`).join('');
+    const endereco = res.enderecos?.[0]?.endereco || it.endereco || '';
+    document.getElementById('det-ins-endereco-linha').textContent = endereco ? `Endereço: ${endereco}` : '';
   } catch(e) { document.getElementById('det-ins-saldo').textContent = '?'; }
 }
 
@@ -1369,7 +1355,7 @@ async function abrirDetalhePA(codigo) {
   document.getElementById('det-pa-nome').textContent   = it.descricao;
   document.getElementById('det-pa-meta').textContent   = [it.familia, it.unidade].filter(Boolean).join(' · ');
   document.getElementById('det-pa-saldo').textContent  = '…';
-  document.getElementById('det-pa-enderecos').innerHTML  = '<div style="padding:8px;color:var(--text-muted);font-size:13px">Carregando...</div>';
+  document.getElementById('det-pa-endereco-linha').textContent = it.endereco ? `Endereço: ${it.endereco}` : '';
   document.getElementById('det-pa-estrutura').innerHTML  = '<div style="padding:0 0 8px;color:var(--text-muted);font-size:13px">Carregando estrutura...</div>';
   // Reseta placeholder antes de abrir
   const wrap = document.getElementById('det-pa-foto-wrap');
@@ -1384,10 +1370,8 @@ async function abrirDetalhePA(codigo) {
   if (resEnd.status === 'fulfilled') {
     const r = resEnd.value;
     document.getElementById('det-pa-saldo').textContent = r.saldo ?? 0;
-    const el = document.getElementById('det-pa-enderecos');
-    el.innerHTML = r.enderecos?.length
-      ? r.enderecos.map(e => `<div class="endereco-row"><span class="endereco-nome">📍 ${esc(e.endereco)}</span><span class="endereco-saldo">${e.saldo}</span></div>`).join('')
-      : '<div style="padding:8px;color:var(--text-muted);font-size:13px">Sem estoque em endereços.</div>';
+    const endereco = r.enderecos?.[0]?.endereco || it.endereco || '';
+    document.getElementById('det-pa-endereco-linha').textContent = endereco ? `Endereço: ${endereco}` : '';
   } else { document.getElementById('det-pa-saldo').textContent = '?'; }
   if (resEst.status === 'fulfilled' && resEst.value?.ok) {
     const itens = resEst.value.itens || [];
