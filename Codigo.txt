@@ -964,6 +964,28 @@ function gravarMovimento(dados) {
     const qtde        = Number(dados.qtde || 0);
     const agora       = new Date();
     const endereco    = itemCad.endereco || '';
+
+    // Checa duplicidade de negócio — mesmo código + tipo + qtde gravado nos últimos 90s.
+    // Protege contra duplo-clique no botão Confirmar antes do modal fechar (a chaveIdem muda
+    // a cada clique, e o OP ADJ- só tem granularidade de minuto — pode nem bater entre os cliques).
+    {
+      const iCodCol  = _idxCol(header, 'codigo');
+      const iTipoCol = _idxCol(header, 'tipo');
+      const iQtdeCol = _idxCol(header, 'qtde');
+      const iDataCol = _idxCol(header, 'data');
+      if (iCodCol >= 0 && iTipoCol >= 0 && iQtdeCol >= 0 && iDataCol >= 0) {
+        const tipoAlvo = isSaida ? 'SAIDA' : 'ENTRADA';
+        const jaGravado = dadosSh.slice(1).some(r => {
+          if (String(r[iCodCol]||'').trim() !== codigo) return false;
+          if (String(r[iTipoCol]||'').trim().toUpperCase() !== tipoAlvo) return false;
+          if (Number(r[iQtdeCol]||0) !== qtde) return false;
+          const t = new Date(r[iDataCol]).getTime();
+          return !isNaN(t) && Math.abs(agora.getTime() - t) <= 90000;
+        });
+        if (jaGravado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
     if (isSaida) {
       const saldoTotal = itemCad.saldo;
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
@@ -1166,6 +1188,28 @@ function gravarMovimentoPA(dados) {
           String(r[iTipoCol]||'').trim().toUpperCase() === 'SAIDA'
         );
         if (jaBaixado) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
+    // Checa duplicidade de negócio — mesmo código + tipo + qtde gravado nos últimos 90s.
+    // Protege contra duplo-clique no botão Confirmar antes do modal fechar (a chaveIdem muda
+    // a cada clique, e o OP ADJ- só tem granularidade de minuto — pode nem bater entre os cliques).
+    {
+      const iCodCol2  = _idxCol(headerPA, 'codigo');
+      const iTipoCol2 = _idxCol(headerPA, 'tipo');
+      const iQtdeCol2 = _idxCol(headerPA, 'qtde');
+      const iDataCol2 = _idxCol(headerPA, 'data');
+      if (iCodCol2 >= 0 && iTipoCol2 >= 0 && iQtdeCol2 >= 0 && iDataCol2 >= 0) {
+        const agoraMs  = Date.now();
+        const tipoAlvo = isSaida ? 'SAIDA' : 'ENTRADA';
+        const jaGravado = dadosPA.slice(1).some(r => {
+          if (String(r[iCodCol2]||'').trim() !== codigo) return false;
+          if (String(r[iTipoCol2]||'').trim().toUpperCase() !== tipoAlvo) return false;
+          if (Number(r[iQtdeCol2]||0) !== qtde) return false;
+          const t = new Date(r[iDataCol2]).getTime();
+          return !isNaN(t) && Math.abs(agoraMs - t) <= 90000;
+        });
+        if (jaGravado) return { ok: true, gravados: 0, jaGravado: true };
       }
     }
 

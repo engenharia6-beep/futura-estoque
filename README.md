@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @36 | Frontend: `8b559b0`+**
+**GAS ativo: @38 | Frontend: `8b559b0`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,9 +44,45 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-08-04
+## Estado atual — 2026-08-11
 
 ### ✅ Funcionando
+
+**Fix: movimento duplicado em Ajuste de Inventário / movimento manual (novo — 2026-08-11)**
+- Reportado com print das linhas 1491-1492 da aba Movimento: mesma OP/código/
+  qtde de Ajuste de Inventário gravada 2x, ~6s de diferença
+- **Causa raiz (2 camadas):**
+  1. Frontend: `confirmarAjuste`/`confirmarMovimentoInsumo`/`confirmarMovimentoPA`
+     reabilitavam o botão "Confirmar" assim que a resposta do backend chegava
+     (bloco `finally`), mas o modal só fechava 1.5-2s depois — nessa janela
+     dava pra clicar de novo com uma `chaveIdem` nova (idempotência não pega,
+     pois a chave é gerada por clique)
+  2. Backend: `gravarMovimento` não tinha nenhuma checagem de duplicidade de
+     negócio (só a `chaveIdem`); `gravarMovimentoPA` tinha uma checagem, mas
+     que **excluía explicitamente** OPs `ADJ-` — e toda OP de movimento
+     manual/ajuste é `ADJ-` (gerada por `_gerarOPAjuste()`), então a proteção
+     nunca disparava nesse caminho
+- **Investigação nos dados reais de produção** (via `listarMovimentos`,
+  leitura, nada escrito) confirmou o padrão pelo menos 2x antes deste report
+  (23/07/2026, `CMOS-A21` e `PLUNCM001`, mesmo código+tipo+qtde+obs, 1min de
+  diferença) — em ambos os casos o campo `OP` tinha ficado **vazio**, não
+  `ADJ-`, então uma checagem baseada só em "OP igual" não teria pego esses
+  casos
+- **Fix aplicado:**
+  - Frontend: os 3 handlers só reabilitam o botão no caminho de **erro**
+    (return antecipado ou `catch`) — no sucesso ele fica desabilitado até o
+    modal fechar (que já reseta o estado ao reabrir)
+  - Backend: `gravarMovimento` e `gravarMovimentoPA` ganham uma checagem de
+    duplicidade por **código + tipo + qtde gravado nos últimos 90s** (em vez
+    de exigir OP igual) — cobre tanto o caso com `ADJ-` quanto o caso com OP
+    vazio, e não depende da granularidade de minuto do `ADJ-` (um clique
+    duplo pode cruzar a virada do minuto e gerar OPs diferentes)
+  - Checagem antiga de "mesma OP real (não-ADJ) já baixada" em
+    `gravarMovimentoPA` (protege Triangular/BOM/PA Direto contra baixa dupla
+    de OP de produção) foi mantida sem alteração
+  - Deploy em 2 passos: `@37` (1a versão, baseada em OP) foi substituída por
+    `@38` minutos depois, ao encontrar nos dados reais os casos de OP vazio
+    que a v1 não cobria
 
 **Dashboard mais rápido (novo — 2026-08-04)**
 - `recarregarDashboard` ("↻ Atualizar" no Início) chegava a levar ~13s: pedia
@@ -322,4 +358,6 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @33 | perf: listarOPS lê a foto direto da coluna FOTO da própria aba OPS, em vez de cruzar com Cadastro/Cadastro_PA — agora lê só 1 aba no total |
 | @34 | fix: remove QR code e saldo dos cartões de Insumo/PA — etiquetas passam a ser só pra identificação |
 | @35 | perf: cache de 30s (CacheService, em chunks) para listarCadastro/listarCadastroPA |
-| @36 | ✅ **ATIVO** — perf: unifica leituras de Cadastro/Cadastro_PA nas funções de gravação (gravarMovimento(PA), lote, gravarBaixaInsumos) — de 2-3 leituras por chamada pra 1 |
+| @36 | perf: unifica leituras de Cadastro/Cadastro_PA nas funções de gravação (gravarMovimento(PA), lote, gravarBaixaInsumos) — de 2-3 leituras por chamada pra 1 |
+| @37 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA para movimentos manuais (op+código+tipo+qtde) — 1a tentativa, substituída pela @38 |
+| @38 | ✅ **ATIVO** — fix: dedup de negócio em gravarMovimento/gravarMovimentoPA por código+tipo+qtde numa janela de 90s (em vez de exigir OP igual) — corrige duplicidade em Ajuste de Inventário/movimento manual (ver "Estado atual") |

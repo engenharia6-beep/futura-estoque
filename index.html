@@ -1263,12 +1263,14 @@ async function confirmarMovimentoInsumo() {
       tipo: _movTipo, qtde, obs: obs || `${_movTipo} Manual`,
       usuario: USUARIO.nome || USUARIO.usuario, op: _gerarOPAjuste(), qrcode: '', chave: _gerarChave(),
     });
-    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); setBtn('btn-confirmar-mov-ins', false, 'Confirmar'); return; }
     mostrarMsg(msg, '✔ Movimento registrado!', 'ok');
     toast('✔ ' + (_movTipo === 'ENTRADA' ? 'Entrada' : 'Saída') + ' registrada!');
     setTimeout(() => { fecharModal('modal-mov-insumo'); carregarInsumos(); }, 1500);
-  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-  finally { setBtn('btn-confirmar-mov-ins', false, 'Confirmar'); }
+  } catch(e) {
+    mostrarMsg(msg, 'Erro: ' + e.message, 'err');
+    setBtn('btn-confirmar-mov-ins', false, 'Confirmar');
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -1420,12 +1422,14 @@ async function confirmarMovimentoPA() {
         tipo: 'ENTRADA', qtde, obs: obs || 'Entrada PA Manual',
         usuario: USUARIO.nome || USUARIO.usuario, op: _gerarOPAjuste(), qrcode: '', chaveIdem: _gerarChave(),
       });
-      if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+      if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); return; }
       mostrarMsg(msg, '✔ Entrada PA registrada!', 'ok');
       toast('✔ Entrada PA registrada!');
       setTimeout(() => { fecharModal('modal-mov-pa'); carregarPA(); }, 1500);
-    } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-    finally { setBtn('btn-confirmar-mov-pa', false, 'Confirmar'); }
+    } catch(e) {
+      mostrarMsg(msg, 'Erro: ' + e.message, 'err');
+      setBtn('btn-confirmar-mov-pa', false, 'Confirmar');
+    }
   }
 }
 
@@ -1586,7 +1590,7 @@ async function confirmarAjuste() {
   try {
     const rota = _ajusteCtx.tipoItem === 'pa' ? 'gravarMovimentoPA' : 'gravarMovimento';
     const res  = await api(rota, base);
-    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao gravar.', 'err'); return; }
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao gravar.', 'err'); setBtn('btn-confirmar-ajuste', false, 'Confirmar Ajuste'); return; }
 
     // Atualiza o cache local para refletir o novo saldo
     const cache = _ajusteCtx.tipoItem === 'pa' ? paCache : insumoCache;
@@ -1596,8 +1600,10 @@ async function confirmarAjuste() {
     toast(`✔ Ajuste registrado: ${tipo} de ${qtde}`);
     mostrarMsg(msg, `✔ ${tipo} de ${qtde} registrada. Novo saldo: ${novaQtde}`, 'ok');
     setTimeout(() => fecharModal('modal-ajuste-inv'), 2000);
-  } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
-  finally { setBtn('btn-confirmar-ajuste', false, 'Confirmar Ajuste'); }
+  } catch(e) {
+    mostrarMsg(msg, 'Erro: ' + e.message, 'err');
+    setBtn('btn-confirmar-ajuste', false, 'Confirmar Ajuste');
+  }
 }
 
 // ══════════════════════════════════════════════════════
