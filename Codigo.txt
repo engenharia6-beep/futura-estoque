@@ -206,19 +206,21 @@ function _mapaCadastroInfo(nomeAba) {
     if (!sh) return {};
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
-    const iSIT = _idxCol(h, 'Situação');
-    const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
-    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iCOD  = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
+    const iSIT  = _idxCol(h, 'Situação');
+    const iEND  = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
+    const iEA   = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iDESC = _idxCol(h, 'DESCRIÇÃO') >= 0 ? _idxCol(h, 'DESCRIÇÃO') : _idxCol(h, 'DESCRICAO');
     const mapa = {};
     if (iCOD < 0) return mapa;
     for (let i = 1; i < data.length; i++) {
       const cod = String(data[i][iCOD]||'').trim();
       if (!cod) continue;
       mapa[cod] = {
-        situacao: iSIT >= 0 ? String(data[i][iSIT]||'').trim().toUpperCase() : '',
-        endereco: iEND >= 0 ? String(data[i][iEND]||'').trim() : '',
-        saldo:    iEA  >= 0 ? Number(data[i][iEA]||0) : 0,
+        situacao:  iSIT  >= 0 ? String(data[i][iSIT]||'').trim().toUpperCase() : '',
+        endereco:  iEND  >= 0 ? String(data[i][iEND]||'').trim() : '',
+        saldo:     iEA   >= 0 ? Number(data[i][iEA]||0) : 0,
+        descricao: iDESC >= 0 ? String(data[i][iDESC]||'').trim() : '',
       };
     }
     return mapa;
@@ -364,6 +366,10 @@ function doPost(e) {
       // ── Mudança de endereço ───────────────────────────────────────────────
       'mudarEndereco':          () => mudarEndereco(dados),
       'mudarEnderecoPA':        () => mudarEnderecoPA(dados),
+
+      // ── Transferência de código (DE: → PARA:) ──────────────────────────────
+      'transferirCodigo':       () => transferirCodigo(dados),
+      'transferirCodigoPA':     () => transferirCodigoPA(dados),
 
       // ── Embarque / DI ─────────────────────────────────────────────────────
       'listarEmbarque':         () => listarEmbarque(),
@@ -999,6 +1005,86 @@ function gravarMovimento(dados) {
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  transferirCodigo — move saldo (total ou parcial) de um Insumo pra outro:
+//  SAIDA na origem + ENTRADA no destino, mesma qtde, numa gravação só
+// ════════════════════════════════════════════════════════════════════════════
+function transferirCodigo(dados) {
+  try {
+    const codOrigem  = String(dados.codigoOrigem  || '').trim();
+    const codDestino = String(dados.codigoDestino || '').trim();
+    const qtde       = Number(dados.qtde || 0);
+    const chaveIdem  = String(dados.chave || dados.chaveIdem || '').trim();
+
+    if (!codOrigem)  return { ok: false, mensagem: 'Código de origem não informado.' };
+    if (!codDestino) return { ok: false, mensagem: 'Código de destino não informado.' };
+    if (codOrigem === codDestino) return { ok: false, mensagem: 'Origem e destino não podem ser iguais.' };
+    if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
+
+    const infoCad     = _mapaCadastroInfo(NOME_ABA_CADASTRO);
+    const itemOrigem  = infoCad[codOrigem];
+    const itemDestino = infoCad[codDestino];
+    if (itemOrigem === undefined)  return { ok: false, mensagem: `Item de origem '${codOrigem}' não encontrado.` };
+    if (itemOrigem.situacao === 'INATIVO')  return { ok: false, mensagem: `Item de origem '${codOrigem}' está INATIVO.` };
+    if (itemDestino === undefined) return { ok: false, mensagem: `Item de destino '${codDestino}' não encontrado.` };
+    if (itemDestino.situacao === 'INATIVO') return { ok: false, mensagem: `Item de destino '${codDestino}' está INATIVO.` };
+    if (qtde > itemOrigem.saldo) return { ok: false, mensagem: `Saldo insuficiente em '${codOrigem}'. Disponível: ${itemOrigem.saldo}.` };
+
+    const sh = _sh(NOME_ABA_MOVIMENTO);
+    if (!sh) return { ok: false, mensagem: 'Aba Movimento não encontrada.' };
+    const dadosSh     = sh.getDataRange().getValues();
+    const header      = dadosSh[0];
+    const linhasAntes = dadosSh.length;
+
+    if (chaveIdem) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    // Mesma proteção de duplo-clique usada em gravarMovimento: SAIDA da origem
+    // com essa qtde já gravada nos últimos 90s
+    const agora = new Date();
+    {
+      const iCodCol = _idxCol(header, 'codigo'), iTipoCol = _idxCol(header, 'tipo'),
+            iQtdeCol = _idxCol(header, 'qtde'), iDataCol = _idxCol(header, 'data');
+      if (iCodCol >= 0 && iTipoCol >= 0 && iQtdeCol >= 0 && iDataCol >= 0) {
+        const jaFeita = dadosSh.slice(1).some(r => {
+          if (String(r[iCodCol]||'').trim() !== codOrigem) return false;
+          if (String(r[iTipoCol]||'').trim().toUpperCase() !== 'SAIDA') return false;
+          if (Number(r[iQtdeCol]||0) !== qtde) return false;
+          const t = new Date(r[iDataCol]).getTime();
+          return !isNaN(t) && Math.abs(agora.getTime() - t) <= 90000;
+        });
+        if (jaFeita) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
+    const op        = String(dados.op || '').trim() || `TRF-${Utilities.formatDate(agora, Session.getScriptTimeZone(), 'yyyyMMdd-HHmm')}`;
+    const obsBase    = String(dados.obs || '').trim();
+    const usuario    = dados.usuario  || '';
+    const computer   = dados.computer || '';
+    const idOut = Utilities.getUuid().substring(0,8);
+    const idIn  = Utilities.getUuid().substring(0,8);
+    const linhas = [
+      _montarLinhaMovimento(header, {
+        id: idOut, data: agora, tipo: 'SAIDA', op, codigo: codOrigem,
+        descricao: itemOrigem.descricao || '', qtde, endereco: itemOrigem.endereco || '',
+        obs: obsBase || `Transferência para ${codDestino}`, usuario, computer, chave: chaveIdem,
+      }),
+      _montarLinhaMovimento(header, {
+        id: idIn, data: agora, tipo: 'ENTRADA', op, codigo: codDestino,
+        descricao: itemDestino.descricao || '', qtde, endereco: itemDestino.endereco || '',
+        obs: obsBase || `Transferência de ${codOrigem}`, usuario, computer, chave: chaveIdem,
+      }),
+    ];
+    sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
+    const verif = _verificarGravacao(sh, [idOut, idIn], linhasAntes);
+    if (!verif.ok) return { ok: false, mensagem: 'Transferência não confirmada. ' + (verif.erro||'') };
+    return { ok: true, gravados: linhas.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro na transferência: ' + e.message }; }
+}
+
 function gravarMovimentosEmLote(movimentos) {
   try {
     if (!movimentos?.length) return { ok: false, mensagem: 'Nenhum movimento.' };
@@ -1240,6 +1326,86 @@ function gravarMovimentoPA(dados) {
     // gravarMovimentoPA não baixa insumos automaticamente — o frontend controla
     return { ok: true, gravados: ids.length };
   } catch(e) { return { ok: false, mensagem: 'Erro ao gravar PA: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  transferirCodigoPA — move saldo (total ou parcial) de um PA pra outro:
+//  SAIDA na origem + ENTRADA no destino, mesma qtde, numa gravação só
+// ════════════════════════════════════════════════════════════════════════════
+function transferirCodigoPA(dados) {
+  try {
+    const codOrigem  = String(dados.codigoOrigem  || '').trim();
+    const codDestino = String(dados.codigoDestino || '').trim();
+    const qtde       = Number(dados.qtde || 0);
+    const chaveIdem  = String(dados.chave || dados.chaveIdem || '').trim();
+
+    if (!codOrigem)  return { ok: false, mensagem: 'Código PA de origem não informado.' };
+    if (!codDestino) return { ok: false, mensagem: 'Código PA de destino não informado.' };
+    if (codOrigem === codDestino) return { ok: false, mensagem: 'Origem e destino não podem ser iguais.' };
+    if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
+
+    const infoCad     = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
+    const itemOrigem  = infoCad[codOrigem];
+    const itemDestino = infoCad[codDestino];
+    if (itemOrigem === undefined)  return { ok: false, mensagem: `PA de origem '${codOrigem}' não encontrado.` };
+    if (itemOrigem.situacao === 'INATIVO')  return { ok: false, mensagem: `PA de origem '${codOrigem}' está INATIVO.` };
+    if (itemDestino === undefined) return { ok: false, mensagem: `PA de destino '${codDestino}' não encontrado.` };
+    if (itemDestino.situacao === 'INATIVO') return { ok: false, mensagem: `PA de destino '${codDestino}' está INATIVO.` };
+    if (qtde > itemOrigem.saldo) return { ok: false, mensagem: `Saldo PA insuficiente em '${codOrigem}'. Disponível: ${itemOrigem.saldo}.` };
+
+    const shPA = _sh(NOME_ABA_MOVIMENTO_PA);
+    if (!shPA) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
+    const dadosPA     = shPA.getDataRange().getValues();
+    const headerPA    = dadosPA[0];
+    const linhasAntes = dadosPA.length;
+
+    if (chaveIdem) {
+      const iChave = headerPA.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosPA.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
+        return { ok: true, gravados: 0, jaGravado: true };
+    }
+
+    // Mesma proteção de duplo-clique usada em gravarMovimentoPA: SAIDA da origem
+    // com essa qtde já gravada nos últimos 90s
+    const agora = new Date();
+    {
+      const iCodCol = _idxCol(headerPA, 'codigo'), iTipoCol = _idxCol(headerPA, 'tipo'),
+            iQtdeCol = _idxCol(headerPA, 'qtde'), iDataCol = _idxCol(headerPA, 'data');
+      if (iCodCol >= 0 && iTipoCol >= 0 && iQtdeCol >= 0 && iDataCol >= 0) {
+        const jaFeita = dadosPA.slice(1).some(r => {
+          if (String(r[iCodCol]||'').trim() !== codOrigem) return false;
+          if (String(r[iTipoCol]||'').trim().toUpperCase() !== 'SAIDA') return false;
+          if (Number(r[iQtdeCol]||0) !== qtde) return false;
+          const t = new Date(r[iDataCol]).getTime();
+          return !isNaN(t) && Math.abs(agora.getTime() - t) <= 90000;
+        });
+        if (jaFeita) return { ok: true, gravados: 0, jaGravado: true };
+      }
+    }
+
+    const op       = String(dados.op || '').trim() || `TRF-${Utilities.formatDate(agora, Session.getScriptTimeZone(), 'yyyyMMdd-HHmm')}`;
+    const obsBase  = String(dados.obs || '').trim();
+    const usuario  = dados.usuario  || '';
+    const computer = dados.computer || '';
+    const idOut = Utilities.getUuid().substring(0,8);
+    const idIn  = Utilities.getUuid().substring(0,8);
+    const linhas = [
+      _montarLinhaMovimento(headerPA, {
+        id: idOut, data: agora, tipo: 'SAIDA', op, codigo: codOrigem,
+        descricao: itemOrigem.descricao || '', qtde, endereco: itemOrigem.endereco || '',
+        obs: obsBase || `Transferência para ${codDestino}`, usuario, computer, chave: chaveIdem,
+      }),
+      _montarLinhaMovimento(headerPA, {
+        id: idIn, data: agora, tipo: 'ENTRADA', op, codigo: codDestino,
+        descricao: itemDestino.descricao || '', qtde, endereco: itemDestino.endereco || '',
+        obs: obsBase || `Transferência de ${codOrigem}`, usuario, computer, chave: chaveIdem,
+      }),
+    ];
+    shPA.getRange(linhasAntes + 1, 1, linhas.length, headerPA.length).setValues(linhas);
+    const verif = _verificarGravacao(shPA, [idOut, idIn], linhasAntes);
+    if (!verif.ok) return { ok: false, mensagem: 'Transferência PA não confirmada. ' + (verif.erro||'') };
+    return { ok: true, gravados: linhas.length };
+  } catch(e) { return { ok: false, mensagem: 'Erro na transferência PA: ' + e.message }; }
 }
 
 function gravarMovimentosEmLotePA(movimentos) {

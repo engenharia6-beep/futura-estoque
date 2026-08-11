@@ -516,6 +516,7 @@
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoInsumo('SAIDA')">➖ Registrar Saída</button>
       <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('insumo')">⚖️ Ajuste de Inventário</button>
       <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
+      <button class="btn btn-full" style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirTransferirCodigo('insumo')">🔀 Transferir Código</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-insumo')">Fechar</button>
     </div>
   </div>
@@ -585,6 +586,7 @@
       <button class="btn btn-danger btn-full" onclick="abrirMovimentoPA('SAIDA')">➖ Baixa PA + Insumos</button>
       <button class="btn btn-full" style="background:rgba(234,179,8,.15);color:#ca8a04;border:1px solid rgba(234,179,8,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAjusteInventario('pa')">⚖️ Ajuste de Inventário</button>
       <button class="btn btn-full" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirAlterarEndereco()">📍 Alterar Endereço</button>
+      <button class="btn btn-full" style="background:rgba(124,58,237,.15);color:#a78bfa;border:1px solid rgba(124,58,237,.35);height:38px;border-radius:var(--radius-sm);font-size:13px;font-weight:700" onclick="abrirTransferirCodigo('pa')">🔀 Transferir Código</button>
       <button class="btn btn-secondary btn-full" onclick="fecharModal('modal-pa')">Fechar</button>
     </div>
   </div>
@@ -718,6 +720,42 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="fecharModal('modal-alt-endereco')">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-alt-end" onclick="confirmarAlterarEndereco()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: TRANSFERIR CÓDIGO (DE: → PARA:)
+══════════════════════════════════════════════════════ -->
+<div id="modal-transferir" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">🔀 Transferir Código</span>
+      <button onclick="fecharModal('modal-transferir')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px">
+        <span style="color:var(--text-muted)">De (origem): </span><strong id="transf-origem"></strong>
+        <div style="margin-top:4px"><span style="color:var(--text-muted)">Saldo disponível: </span><strong id="transf-saldo-origem" style="font-family:var(--mono)"></strong></div>
+      </div>
+      <div class="field"><label>Código de destino (Para:)</label>
+        <input id="transf-destino" type="text" placeholder="Ex: VTV-001" autocapitalize="characters" oninput="atualizarPreviewTransferencia()">
+      </div>
+      <div class="field"><label>Quantidade a transferir
+          <span style="font-size:11px;color:var(--accent);cursor:pointer;font-weight:700" onclick="_transfPreencherTudo()">(usar tudo)</span>
+        </label>
+        <input id="transf-qtde" type="number" min="0.01" step="0.01" placeholder="0" oninput="atualizarPreviewTransferencia()">
+      </div>
+      <div id="transf-preview" class="preview-box" style="display:none"></div>
+      <div class="field"><label>Observação <span style="font-size:11px;color:var(--text-muted)">(opcional)</span></label>
+        <input id="transf-obs" type="text" placeholder="Ex: Correção de código divergente">
+      </div>
+      <div id="transf-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-transferir')">Cancelar</button>
+      <button class="btn btn-full" id="btn-confirmar-transf" disabled style="background:#7c3aed;color:#fff" onclick="confirmarTransferencia()">🔀 Confirmar Transferência</button>
     </div>
   </div>
 </div>
@@ -1648,6 +1686,129 @@ async function confirmarAlterarEndereco() {
     }, 900);
   } catch(e) { mostrarMsg(msg, 'Erro: ' + e.message, 'err'); }
   finally { setBtn('btn-confirmar-alt-end', false, 'Confirmar'); }
+}
+
+// ══════════════════════════════════════════════════════
+//  TRANSFERIR CÓDIGO (DE: → PARA:)
+// ══════════════════════════════════════════════════════
+let _transfCtx = null; // { tipoItem:'insumo'|'pa', codigo, descricao, saldo }
+
+async function abrirTransferirCodigo(tipoItem) {
+  if (!_itemAtual) return;
+  _transfCtx = {
+    tipoItem,
+    codigo:    _itemAtual.codigo,
+    descricao: _itemAtual.descricao || '',
+    saldo:     _itemAtual.estoqueAtual ?? 0,
+  };
+  document.getElementById('transf-origem').textContent = `${_transfCtx.codigo} — ${_transfCtx.descricao}`;
+  document.getElementById('transf-saldo-origem').textContent = _transfCtx.saldo;
+  document.getElementById('transf-destino').value = '';
+  document.getElementById('transf-qtde').value    = '';
+  document.getElementById('transf-obs').value     = '';
+  document.getElementById('transf-preview').style.display = 'none';
+  document.getElementById('transf-msg').className = 'msg';
+  document.getElementById('transf-msg').textContent = '';
+  document.getElementById('btn-confirmar-transf').disabled = true;
+  setBtn('btn-confirmar-transf', false, '🔀 Confirmar Transferência');
+  fecharModal(tipoItem === 'pa' ? 'modal-pa' : 'modal-insumo');
+  abrirModal('modal-transferir');
+  // Garante que o cache do mesmo tipo esteja carregado, pro preview de saldo do destino funcionar
+  const cache = tipoItem === 'pa' ? paCache : insumoCache;
+  if (!cache.length) {
+    await (tipoItem === 'pa' ? carregarPA(true) : carregarInsumos(true));
+    atualizarPreviewTransferencia();
+  }
+}
+
+function _transfPreencherTudo() {
+  if (!_transfCtx) return;
+  document.getElementById('transf-qtde').value = _transfCtx.saldo;
+  atualizarPreviewTransferencia();
+}
+
+function atualizarPreviewTransferencia() {
+  if (!_transfCtx) return;
+  const destino = document.getElementById('transf-destino').value.trim().toUpperCase();
+  const qtde    = parseFloat(document.getElementById('transf-qtde').value || 0);
+  const preview = document.getElementById('transf-preview');
+  const msg     = document.getElementById('transf-msg');
+  const btnConf = document.getElementById('btn-confirmar-transf');
+
+  if (!destino || !qtde || qtde <= 0) {
+    preview.style.display = 'none';
+    mostrarMsg(msg, '', '');
+    btnConf.disabled = true;
+    return;
+  }
+  if (destino === _transfCtx.codigo) {
+    preview.style.display = 'none';
+    mostrarMsg(msg, 'Origem e destino não podem ser iguais.', 'err');
+    btnConf.disabled = true;
+    return;
+  }
+  if (qtde > _transfCtx.saldo) {
+    preview.style.display = 'none';
+    mostrarMsg(msg, `Saldo insuficiente: ${_transfCtx.saldo} disponível, necessário ${qtde}.`, 'err');
+    btnConf.disabled = true;
+    return;
+  }
+
+  const cache = _transfCtx.tipoItem === 'pa' ? paCache : insumoCache;
+  const itemDestino   = cache.find(i => i.codigo === destino);
+  const naoEncontrado = !itemDestino;
+
+  if (naoEncontrado) {
+    mostrarMsg(msg, `⚠️ Código "${destino}" não encontrado no cache. Verifique antes de confirmar.`, 'warn');
+  } else {
+    mostrarMsg(msg, '', '');
+  }
+  btnConf.disabled = false;
+
+  const saldoTag = naoEncontrado
+    ? `<span style="font-size:11px;color:var(--text-muted);margin-left:6px">não encontrado no cache</span>`
+    : `<span style="font-size:11px;font-weight:600;margin-left:6px;color:var(--text-muted)">saldo atual: ${itemDestino.estoqueAtual ?? 0}</span>`;
+
+  preview.style.display = 'block';
+  preview.innerHTML = `
+    <div class="preview-row"><span>${esc(_transfCtx.codigo)}</span><span class="preview-tipo-saida">SAÍDA ${qtde}</span></div>
+    <div class="preview-row"><span>${esc(destino)}${saldoTag}</span><span class="preview-tipo-entrada">ENTRADA ${qtde}</span></div>`;
+}
+
+async function confirmarTransferencia() {
+  if (!_transfCtx) return;
+  const codigoDestino = document.getElementById('transf-destino').value.trim().toUpperCase();
+  const qtde          = parseFloat(document.getElementById('transf-qtde').value || 0);
+  const obs           = document.getElementById('transf-obs').value.trim();
+  const msg           = document.getElementById('transf-msg');
+
+  if (!codigoDestino)    { mostrarMsg(msg, 'Informe o código de destino.', 'err'); return; }
+  if (!qtde || qtde<=0)  { mostrarMsg(msg, 'Quantidade inválida.', 'err'); return; }
+  if (codigoDestino === _transfCtx.codigo) { mostrarMsg(msg, 'Origem e destino não podem ser iguais.', 'err'); return; }
+  if (qtde > _transfCtx.saldo) { mostrarMsg(msg, `Saldo insuficiente: ${_transfCtx.saldo} disponível.`, 'err'); return; }
+
+  if (!confirm(`Confirmar transferência?\n\n${_transfCtx.codigo} → SAÍDA ${qtde}\n${codigoDestino} → ENTRADA ${qtde}`)) return;
+
+  const isPA = _transfCtx.tipoItem === 'pa';
+  setBtn('btn-confirmar-transf', true, '<span class="spinner"></span>');
+  try {
+    const res = await api(isPA ? 'transferirCodigoPA' : 'transferirCodigo', {
+      codigoOrigem: _transfCtx.codigo, codigoDestino, qtde, obs,
+      usuario: USUARIO.nome || USUARIO.usuario, chave: _gerarChave(),
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro ao transferir.', 'err'); setBtn('btn-confirmar-transf', false, '🔀 Confirmar Transferência'); return; }
+    if (res.jaGravado) { mostrarMsg(msg, '⚠️ Esta transferência já havia sido gravada.', 'warn'); setBtn('btn-confirmar-transf', false, '🔀 Confirmar Transferência'); return; }
+
+    toast(`✔ Transferido ${qtde} de ${_transfCtx.codigo} para ${codigoDestino}`);
+    mostrarMsg(msg, `✔ Transferência registrada!`, 'ok');
+    setTimeout(() => {
+      fecharModal('modal-transferir');
+      if (isPA) carregarPA(true); else carregarInsumos(true);
+    }, 1500);
+  } catch(e) {
+    mostrarMsg(msg, 'Erro: ' + e.message, 'err');
+    setBtn('btn-confirmar-transf', false, '🔀 Confirmar Transferência');
+  }
 }
 
 // ══════════════════════════════════════════════════════

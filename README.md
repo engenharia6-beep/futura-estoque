@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @38 | Frontend: `0d8725f`+**
+**GAS ativo: @39 | Frontend: `0d8725f`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,30 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-08-11
 
 ### ✅ Funcionando
+
+**🔀 Transferência de Código (novo — 2026-08-11)**
+- Botão "🔀 Transferir Código" no detalhe de Insumo e de PA (ao lado de
+  "📍 Alterar Endereço") — move saldo (total ou parcial) de um código pra
+  outro
+- Só entre códigos do **mesmo tipo** (Insumo→Insumo, PA→PA) — decisão de
+  negócio pra não misturar cadastros/unidades diferentes
+- O código de destino **precisa já existir cadastrado e ATIVO** — não cria
+  cadastro na hora, evita erro de digitação virando lixo no cadastro
+- Modal: mostra saldo disponível da origem, campo de código de destino
+  (com atalho "usar tudo" pra preencher a quantidade toda), preview em
+  tempo real (SAÍDA na origem / ENTRADA no destino) igual ao padrão já
+  usado no Triangular
+- Backend: `transferirCodigo`/`transferirCodigoPA` gravam SAÍDA na origem +
+  ENTRADA no destino numa única chamada (`setValues` de 2 linhas), com a
+  mesma checagem de idempotência (`chave`) e de duplicidade de negócio
+  (código+tipo+qtde nos últimos 90s) usada em `gravarMovimento` — protege
+  contra duplo-clique do mesmo jeito
+- OP gerada como `TRF-YYYYMMDD-HHmm` (prefixo próprio, pra diferenciar de
+  `ADJ-` nos relatórios de Movimento)
+- Testado ao vivo só nos caminhos de erro (código inexistente, origem =
+  destino, saldo insuficiente) — nenhuma transferência real de dados foi
+  gravada durante o teste; o fluxo completo (preview, confirmação, chamada
+  de API) foi validado em navegador headless com API mockada
 
 **Fix: movimento duplicado em Ajuste de Inventário / movimento manual (novo — 2026-08-11)**
 - Reportado com print das linhas 1491-1492 da aba Movimento: mesma OP/código/
@@ -360,4 +384,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @35 | perf: cache de 30s (CacheService, em chunks) para listarCadastro/listarCadastroPA |
 | @36 | perf: unifica leituras de Cadastro/Cadastro_PA nas funções de gravação (gravarMovimento(PA), lote, gravarBaixaInsumos) — de 2-3 leituras por chamada pra 1 |
 | @37 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA para movimentos manuais (op+código+tipo+qtde) — 1a tentativa, substituída pela @38 |
-| @38 | ✅ **ATIVO** — fix: dedup de negócio em gravarMovimento/gravarMovimentoPA por código+tipo+qtde numa janela de 90s (em vez de exigir OP igual) — corrige duplicidade em Ajuste de Inventário/movimento manual (ver "Estado atual") |
+| @38 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA por código+tipo+qtde numa janela de 90s (em vez de exigir OP igual) — corrige duplicidade em Ajuste de Inventário/movimento manual |
+| @39 | ✅ **ATIVO** — feat: transferirCodigo/transferirCodigoPA — transferência de saldo (total ou parcial) de um código pro outro, mesmo tipo (Insumo→Insumo, PA→PA), ver "Estado atual" |
