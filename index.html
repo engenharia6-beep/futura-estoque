@@ -306,6 +306,10 @@
     .btn-imprimir-g{background:#1a73e8;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
     .btn-imprimir-p{background:#0f6e56;color:#fff;height:36px;padding:0 14px;border-radius:6px;font-size:12px;font-weight:700}
     .btn-limpar-fila{background:transparent;color:var(--text-muted);height:36px;padding:0 10px;border-radius:6px;font-size:12px}
+    /* Telas maiores (tablet/desktop): modal centralizado em vez de bottom-sheet.
+       Regra perdeu o @media que a envolvia numa reescrita antiga (2026-06-10) e
+       passou a valer sem condição, inclusive no celular — restaurada aqui. */
+    @media (min-width:600px){
       .modal-sheet{border-radius:20px;margin:auto;max-height:80vh}
       .modal-overlay{align-items:center}
     }
