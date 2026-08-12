@@ -333,6 +333,7 @@
     .op-row-qtde{font-size:12px;font-weight:700;color:#1a2e2e;white-space:nowrap;flex-shrink:0}
     .op-row-qtde span{color:#4a6a6a;font-weight:400}
     .op-row-desc{font-size:11px;color:#4a6a6a;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .op-row-cliente{font-size:11px;font-weight:700;color:#1a5c5a;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     /* Botões */
     .op-row-btns{display:flex;align-items:center;gap:6px;padding:6px 12px;flex-wrap:wrap;background:rgba(26,92,90,.05)}
     .op-row-btns-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
@@ -345,7 +346,7 @@
       .op-row-ids{width:84px;min-width:84px;padding:8px 6px}
       .op-row-ids .rf{font-size:10px}
       .op-row-btns-right{margin-left:0;flex-basis:100%;flex-wrap:wrap}
-      .op-obs-label,.op-silk-label{white-space:normal;overflow:visible;text-overflow:clip;max-width:100%}
+      .op-obs-label,.op-silk-label,.op-row-cliente{white-space:normal;overflow:visible;text-overflow:clip;max-width:100%}
     }
     .btn-silk{height:26px;padding:0 10px;border-radius:4px;font-size:10px;font-weight:700;background:#1a5c5a;color:#fff;border:none;white-space:nowrap;flex-shrink:0;cursor:pointer}
     .btn-silk-metal{background:#4a6a6a}
@@ -1899,6 +1900,7 @@ function renderOPS(ops) {
               <div class="op-row-qtde"><span>Qtde: </span>${op.qtde}</div>
             </div>
             <div class="op-row-desc">${esc(op.descricao)}</div>
+            ${op.cliente ? `<div class="op-row-cliente">👤 ${esc(op.cliente)}</div>` : ''}
           </div>
         </div>
         <div class="op-row-btns">
@@ -1941,7 +1943,7 @@ function _bindOPsClicks() {
 }
 
 function _matchOPS(op, termos) {
-  const haystack = [op.op, op.pedido, op.codigo, op.descricao, op.obs, op.origem]
+  const haystack = [op.op, op.pedido, op.codigo, op.descricao, op.obs, op.origem, op.cliente]
     .join(' ').toLowerCase();
   return termos.every(t => haystack.includes(t));
 }

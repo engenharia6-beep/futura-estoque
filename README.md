@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @39 | Frontend: `99f3f55`+**
+**GAS ativo: @40 | Frontend: `99f3f55`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,18 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-08-11
 
 ### ✅ Funcionando
+
+**👤 Cliente na lista de OPs (novo — 2026-08-11)**
+- Usuário adicionou a coluna `CLIENTE` (P) na aba OPS, preenchida com quem
+  fez o pedido — pra equipe de estoque saber a quem entregar a encomenda
+- `listarOPS` agora lê essa coluna e devolve `cliente` em cada item; sem
+  leitura extra (mesma leitura única da aba OPS que já existia)
+- Card da OP mostra `👤 <cliente>` logo abaixo da descrição do produto,
+  quando preenchido — mesma posição que o usuário indicou por cima de um
+  print real do card (OP 9156 / Pedido 23124)
+- Busca de OPs passa a considerar o nome do cliente também
+- Testado ao vivo contra a planilha de produção: as 8 OPs abertas já têm
+  `CLIENTE` preenchido, valor bate com o que está na coluna P
 
 **Redesign do modal de detalhe — Insumo/PA (novo — 2026-08-11)**
 - Header compacto: código/nome/endereço à esquerda, saldo numa caixa
@@ -408,4 +420,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @36 | perf: unifica leituras de Cadastro/Cadastro_PA nas funções de gravação (gravarMovimento(PA), lote, gravarBaixaInsumos) — de 2-3 leituras por chamada pra 1 |
 | @37 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA para movimentos manuais (op+código+tipo+qtde) — 1a tentativa, substituída pela @38 |
 | @38 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA por código+tipo+qtde numa janela de 90s (em vez de exigir OP igual) — corrige duplicidade em Ajuste de Inventário/movimento manual |
-| @39 | ✅ **ATIVO** — feat: transferirCodigo/transferirCodigoPA — transferência de saldo (total ou parcial) de um código pro outro, mesmo tipo (Insumo→Insumo, PA→PA), ver "Estado atual" |
+| @39 | feat: transferirCodigo/transferirCodigoPA — transferência de saldo (total ou parcial) de um código pro outro, mesmo tipo (Insumo→Insumo, PA→PA) |
+| @40 | ✅ **ATIVO** — feat: listarOPS lê a coluna CLIENTE (P) da aba OPS — quem fez o pedido, exibido no card da OP pra equipe de estoque saber a quem entregar |

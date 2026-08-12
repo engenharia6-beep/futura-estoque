@@ -1600,6 +1600,8 @@ function listarOPS() {
                                                // que já verifica na planilha se a OP tem
                                                // movimento — substitui escanear Movimento/
                                                // Movimento_PA inteiros aqui no código
+    const iCliente = idx['CLIENTE']    ?? -1; // coluna P — quem fez o pedido, pra equipe
+                                               // de estoque saber a quem entregar
 
     return data.slice(1)
       .filter(r => {
@@ -1628,6 +1630,7 @@ function listarOPS() {
           origem,                          // 'INSUMO' | 'PA'
           isPA,
           estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA'
+          cliente:  get(r, iCliente),
           obs:      get(r, iObs),
           zpl:      get(r, iZPL),
           zplMetal: get(r, iMetal),
