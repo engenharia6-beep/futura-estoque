@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @40 | Frontend: `99f3f55`+**
+**GAS ativo: @40 | Frontend: `7fe8ecd`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,9 +44,32 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-08-11
+## Estado atual — 2026-08-12
 
 ### ✅ Funcionando
+
+**🐛 Fix: modal voltou a ser bottom-sheet no celular (2026-08-12)**
+- Achado ao investigar um aviso do linter da IDE (`}` sem `@media{}`
+  correspondente perto de `.modal-sheet`/`.modal-overlay`)
+- Causa raiz (achada via `git log -p`): um `@media (min-width:600px){...}`
+  perdeu a linha de abertura numa reescrita antiga do CSS (commit `2a467ef`,
+  2026-06-10) — as regras `.modal-sheet{border-radius:20px;margin:auto;
+  max-height:80vh}` e `.modal-overlay{align-items:center}` sobraram soltas
+  e passaram a valer **sem condição, em qualquer tela**, inclusive celular
+- Impacto real medido (Playwright, 390×844): todo modal do app abria
+  centralizado com cantos arredondados nos 4 lados, em vez de grudado
+  embaixo (bottom-sheet) como a animação `slideUp` e o `.modal-handle`
+  sugerem — rodou assim em produção por ~2 meses, sem quebrar nada,
+  só divergindo do design mobile-first original
+- `#bottom-nav.visible{display:none}`/`#sidebar`/`#main-area`, que também
+  estavam dentro do `@media` original, **não** foram restaurados — alvejam
+  um layout de sidebar de desktop que não existe mais no HTML desde a
+  mesma reescrita (hoje o app usa `#bottom-nav` sempre visível, sem
+  sidebar)
+- Fix: restaurado o `@media (min-width:600px)` só em torno das duas regras
+  de modal. Validado nos dois breakpoints — mobile 390×844 fica
+  `flex-end`/`20px 20px 0 0`/`776px` (grudado embaixo); desktop 1024×800
+  fica `center`/`20px`/`640px` (igual já estava, sem mudança visível)
 
 **👤 Cliente na lista de OPs (novo — 2026-08-11)**
 - Usuário adicionou a coluna `CLIENTE` (P) na aba OPS, preenchida com quem
