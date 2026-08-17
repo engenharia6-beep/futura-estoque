@@ -1264,6 +1264,16 @@ async function abrirDetalheInsumo(codigo) {
     document.getElementById('det-ins-saldo').textContent = res.saldo ?? 0;
     const endereco = res.enderecos?.[0]?.endereco || it.endereco || '';
     document.getElementById('det-ins-endereco-linha').textContent = endereco ? `Endereço: ${endereco}` : '';
+    // Atualiza o saldo/endereço em memória (cache + _itemAtual) com o valor
+    // fresco — sem isso, o Ajuste de Inventário usava o saldo antigo do
+    // cache e podia divergir do saldo real do backend na hora de confirmar
+    const saldoFresco = Number(res.saldo ?? it.estoqueAtual ?? 0);
+    it.estoqueAtual = saldoFresco;
+    it.endereco = endereco;
+    if (_itemAtual && _itemAtual.codigo === codigo) {
+      _itemAtual.estoqueAtual = saldoFresco;
+      _itemAtual.endereco = endereco;
+    }
   } catch(e) { document.getElementById('det-ins-saldo').textContent = '?'; }
 }
 
@@ -1377,6 +1387,16 @@ async function abrirDetalhePA(codigo) {
     document.getElementById('det-pa-saldo').textContent = r.saldo ?? 0;
     const endereco = r.enderecos?.[0]?.endereco || it.endereco || '';
     document.getElementById('det-pa-endereco-linha').textContent = endereco ? `Endereço: ${endereco}` : '';
+    // Atualiza o saldo/endereço em memória (cache + _itemAtual) com o valor
+    // fresco — sem isso, o Ajuste de Inventário usava o saldo antigo do
+    // cache e podia divergir do saldo real do backend na hora de confirmar
+    const saldoFresco = Number(r.saldo ?? it.estoqueAtual ?? 0);
+    it.estoqueAtual = saldoFresco;
+    it.endereco = endereco;
+    if (_itemAtual && _itemAtual.codigo === codigo) {
+      _itemAtual.estoqueAtual = saldoFresco;
+      _itemAtual.endereco = endereco;
+    }
   } else { document.getElementById('det-pa-saldo').textContent = '?'; }
   if (resEst.status === 'fulfilled' && resEst.value?.ok) {
     const itens = resEst.value.itens || [];
