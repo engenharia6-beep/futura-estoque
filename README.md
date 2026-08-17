@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @40 | Frontend: `fd509d7`+**
+**GAS ativo: @43 | Frontend: `fd509d7`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -48,34 +48,33 @@ deploys no fim deste arquivo.
 
 ### ✅ Funcionando
 
-**🐛 Fix: Ajuste de Inventário usava saldo desatualizado do cache (2026-08-12, 2 rodadas)**
-- ⚠️ **Rodada 2**: o mesmo erro voltou a acontecer com o mesmo `MCIP-515`
-  mesmo depois do fix abaixo, porque ele só cobria parte do problema — se
-  o usuário clicasse em "⚖️ Inventário" **rápido o suficiente** (antes do
-  fetch fresco do detalhe terminar), `abrirAjusteInventario` ainda lia o
-  saldo velho de `_itemAtual`. Fix definitivo: `abrirAjusteInventario`/
-  `_ajusteCarregar` agora sempre buscam o saldo fresco na hora de abrir o
-  Ajuste — enquanto isso, o saldo mostra "…" e o campo "Nova quantidade"
-  fica **desabilitado**, então fisicamente não dá pra digitar contra um
-  número que ainda pode estar errado. Testado com Playwright simulando a
-  corrida (fetch mockado com 400ms de atraso): confirmado que o campo só
-  libera depois que o valor bate com o real
-- **Rodada 1** (abaixo): reportado com print do Ajuste PA de `MCIP-515`: tela mostrava "Saldo
-  atual: 322", usuário digitou 165 (esperando SAÍDA de 157), backend
-  recusou com "Disponível: 102" — número que não batia com o que a tela
-  mostrava, gerando confusão
-- Causa: `abrirDetalheInsumo`/`abrirDetalhePA` buscam o saldo fresco (via
-  `obterEnderecosSaldo(PA)`) e atualizam só o texto na tela — nunca
-  gravavam esse valor de volta em `_itemAtual` nem no item dentro de
-  `insumoCache`/`paCache`. `abrirAjusteInventario` lia o saldo direto de
-  `_itemAtual.estoqueAtual`, que ficava com o valor antigo do cache
-- O backend sempre usou o saldo real e recusou corretamente — nada foi
-  gravado errado, o bug era só a exibição/cálculo do delta no frontend
-- Fix: ao resolver o fetch fresco, grava o saldo/endereço de volta no
-  objeto do cache (mesma referência) e em `_itemAtual`. Testado com
-  Playwright: cache "velho" com 322, fetch fresco mockado com 102 — após
-  abrir o detalhe, `_itemAtual`/cache/tela ficam com 102, e o Ajuste de
-  Inventário exibe 102 em vez de 322
+**🐛 Fix: PA validava saldo contra a fonte errada — causa raiz real (2026-08-12, deploy @43)**
+- Reportado 3x com o mesmo item (`MCIP-515`): tela sempre mostrava "Saldo
+  atual: 322", mas `gravarMovimentoPA` recusava a saída de 157 com
+  "Disponível: 102" — número que nunca batia com o que a tela mostrava
+- **Rodadas 1 e 2** trataram sintomas no frontend (saldo do cache não
+  atualizado após o fetch fresco do detalhe; depois, corrida entre o
+  clique em "Inventário" e esse fetch) — melhorias legítimas (o app agora
+  sempre mostra o `ESTOQUE_ATUAL` mais recente possível), mas **não eram a
+  causa do erro reportado**, por isso ele continuou voltando
+- **Causa raiz real**, achada com um diagnóstico temporário direto na
+  planilha: existem **duas fontes de saldo PA diferentes e dessincronizadas**.
+  `ESTOQUE_ATUAL` (Cadastro_PA) é uma fórmula própria (`=IF(...;V-W;XLOOKUP(...))`)
+  usada por **todas as telas** (lista, detalhe, Ajuste) — e valia 322.
+  `gravarMovimentoPA`/`gravarMovimentosEmLotePA`/`pagarOPTriangularPA`
+  validavam o saldo somando só o histórico de `Movimento_PA`
+  (`_saldosEmMemoria`) — e essa soma valia 102. O último movimento do app
+  pra esse código foi em 03/06/2026; os 220 de diferença vieram de fora do
+  fluxo do app (ex: correção manual direto na planilha) e nunca apareceram
+  no `Movimento_PA`, então a soma ficou presa no valor antigo
+- Fix: as 3 funções passam a validar contra `ESTOQUE_ATUAL`
+  (`_mapaCadastroInfo(...).saldo` — a mesma fonte que toda tela já usa)
+  em vez de somar `Movimento_PA`. `pagarOPTriangularPA` também ganhou de
+  brinde a eliminação de uma releitura duplicada do Cadastro_PA (descrição/
+  endereço), já cobertos pelo mesmo `_mapaCadastroInfo`
+- Testado ao vivo contra produção só com quantidade sempre maior que o
+  saldo real (nada gravado): mensagem de erro passou a dizer
+  "Disponível: 322" em vez de "Disponível: 102", confirmando a correção
 
 **🐛 Fix: modal voltou a ser bottom-sheet no celular (2026-08-12)**
 - Achado ao investigar um aviso do linter da IDE (`}` sem `@media{}`
@@ -418,6 +417,18 @@ código.
 
 ### 📋 Assuntos em aberto
 
+- **`ESTOQUE_ATUAL` do PA pode ficar dessincronizado do `Movimento_PA`
+  (visto em 2026-08-12)** — a fórmula de `ESTOQUE_ATUAL` em `Cadastro_PA`
+  não deriva só do `Movimento_PA`; qualquer correção de saldo feita fora
+  do fluxo do app (edição direta na planilha, por exemplo) muda
+  `ESTOQUE_ATUAL` sem gerar uma linha em `Movimento_PA`. Corrigimos os 3
+  pontos do backend que validavam contra a soma errada (ver deploy @43),
+  então agora a validação sempre bate com o que a tela mostra — mas o
+  `ESTOQUE_ATUAL` em si continua sendo a fonte de verdade "por fora"; se
+  ele estiver errado, todo o app mostra o número errado (só não vai mais
+  dar erro de validação incoerente). Vale conferir periodicamente se
+  `ESTOQUE_ATUAL` de itens PA batem com uma contagem física, especialmente
+  itens sem movimento recente no app.
 - **Backend sem controle de versão em git** — hoje só existe o histórico de
   versões do próprio Apps Script (`clasp versions`), sem diff/blame/PR, e foi
   exatamente essa falta de rastreabilidade que permitiu o incidente do @25
@@ -473,4 +484,6 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @37 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA para movimentos manuais (op+código+tipo+qtde) — 1a tentativa, substituída pela @38 |
 | @38 | fix: dedup de negócio em gravarMovimento/gravarMovimentoPA por código+tipo+qtde numa janela de 90s (em vez de exigir OP igual) — corrige duplicidade em Ajuste de Inventário/movimento manual |
 | @39 | feat: transferirCodigo/transferirCodigoPA — transferência de saldo (total ou parcial) de um código pro outro, mesmo tipo (Insumo→Insumo, PA→PA) |
-| @40 | ✅ **ATIVO** — feat: listarOPS lê a coluna CLIENTE (P) da aba OPS — quem fez o pedido, exibido no card da OP pra equipe de estoque saber a quem entregar |
+| @40 | feat: listarOPS lê a coluna CLIENTE (P) da aba OPS — quem fez o pedido, exibido no card da OP pra equipe de estoque saber a quem entregar |
+| @41-@42 | diagnóstico temporário (removido) — investigar divergência entre ESTOQUE_ATUAL e a soma do Movimento_PA |
+| @43 | ✅ **ATIVO** — fix: gravarMovimentoPA/gravarMovimentosEmLotePA/pagarOPTriangularPA passam a validar saldo contra ESTOQUE_ATUAL (mesma fonte das telas), não contra a soma do Movimento_PA — ver "Estado atual" |

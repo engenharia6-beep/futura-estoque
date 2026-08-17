@@ -1191,20 +1191,6 @@ function obterSaldoPA(codigo) {
   } catch(e) { return 0; }
 }
 
-function _estoqueInicialPA(codigo) {
-  try {
-    const sh = _sh(NOME_ABA_CADASTRO_PA);
-    if (!sh) return 0;
-    const data = sh.getDataRange().getValues();
-    const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO');
-    const iEI  = _idxCol(h, 'ESTOQUE_INICIAL');
-    if (iCOD < 0 || iEI < 0) return 0;
-    const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
-    return row ? Number(row[iEI]||0) : 0;
-  } catch(e) { return 0; }
-}
-
 // Endereço é fixo por item (Cadastro_PA, coluna F) — lê só o Cadastro_PA,
 // sem tocar em Movimento_PA. Mesmo formato de resposta de antes.
 function obterEnderecosSaldoPA(codigo) {
@@ -1299,7 +1285,6 @@ function gravarMovimentoPA(dados) {
       }
     }
 
-    const saldosPA   = _saldosEmMemoria(dadosPA, headerPA);
     const linhasAntes= dadosPA.length;
     const agora      = new Date();
     const endereco   = itemCadPA.endereco || '';
@@ -1312,7 +1297,13 @@ function gravarMovimentoPA(dados) {
     };
 
     if (isSaida) {
-      const saldoTotal = saldosPA[codigo] || 0;
+      // Usa ESTOQUE_ATUAL (itemCadPA.saldo) — a MESMA fonte que todas as
+      // telas mostram (lista, detalhe, Ajuste). Antes comparava contra a
+      // soma pura do Movimento_PA (_saldosEmMemoria), que diverge sempre
+      // que o saldo real é corrigido fora do fluxo de movimentos do app
+      // (contagem física direto na planilha, por exemplo) — causava
+      // "saldo insuficiente" com um número que não batia com a tela.
+      const saldoTotal = itemCadPA.saldo;
       if (qtde > saldoTotal) return { ok: false, mensagem: `Saldo PA insuficiente para '${codigo}'. Disponível: ${saldoTotal}.` };
     }
     const id  = Utilities.getUuid().substring(0, 8);
@@ -1443,8 +1434,7 @@ function gravarMovimentosEmLotePA(movimentos) {
       }
     }
 
-    const saldosMap = _saldosEmMemoria(dadosSh, header);
-    // 1 leitura só do Cadastro_PA: situação + endereço (antes eram 2
+    // 1 leitura só do Cadastro_PA: situação + endereço + saldo (antes eram 2
     // leituras separadas — _mapaEnderecoCadastroPA + _mapaStatusCadastroPA)
     const infoCad = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
     const erros = [], ids = [], agora = new Date();
@@ -1455,7 +1445,9 @@ function gravarMovimentosEmLotePA(movimentos) {
       if (item === undefined) { erros.push(`PA '${cod}' não cadastrado.`); continue; }
       if (item.situacao === 'INATIVO')  { erros.push(`PA '${cod}' INATIVO.`); continue; }
       if (String(mov.tipo||'').toUpperCase()==='SAIDA') {
-        const s = saldosMap[cod]||0;
+        // ESTOQUE_ATUAL (item.saldo) — mesma fonte das telas, não a soma
+        // pura do Movimento_PA (ver gravarMovimentoPA para o motivo)
+        const s = item.saldo;
         if (Number(mov.qtde||0) > s) erros.push(`Saldo PA insuficiente '${cod}': disponível ${s}.`);
       }
     }
@@ -1494,23 +1486,27 @@ function pagarOPTriangularPA(dados) {
     if (codOrigem === codDestino) return { ok: false, mensagem: 'Origem e destino não podem ser iguais.' };
     if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
 
-    const mapa = _mapaStatusCadastroPA();
-    if (mapa[codOrigem]  === undefined) return { ok: false, mensagem: `PA origem '${codOrigem}' não cadastrado.` };
-    if (mapa[codOrigem]  === 'INATIVO')  return { ok: false, mensagem: `PA origem '${codOrigem}' INATIVO.` };
-    if (mapa[codDestino] === undefined) return { ok: false, mensagem: `PA destino '${codDestino}' não cadastrado.` };
-    if (mapa[codDestino] === 'INATIVO')  return { ok: false, mensagem: `PA destino '${codDestino}' INATIVO.` };
+    // 1 leitura só do Cadastro_PA: situação + endereço + saldo + descrição
+    // (antes eram _mapaStatusCadastroPA + uma releitura separada mais abaixo
+    // só pra descrição/endereço)
+    const infoCad = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
+    const itemOri = infoCad[codOrigem];
+    const itemDes = infoCad[codDestino];
+    if (itemOri === undefined) return { ok: false, mensagem: `PA origem '${codOrigem}' não cadastrado.` };
+    if (itemOri.situacao === 'INATIVO')  return { ok: false, mensagem: `PA origem '${codOrigem}' INATIVO.` };
+    if (itemDes === undefined) return { ok: false, mensagem: `PA destino '${codDestino}' não cadastrado.` };
+    if (itemDes.situacao === 'INATIVO')  return { ok: false, mensagem: `PA destino '${codDestino}' INATIVO.` };
 
     const sh = _sh(NOME_ABA_MOVIMENTO_PA);
     if (!sh) return { ok: false, mensagem: 'Aba Movimento_PA não encontrada.' };
 
-    // ── Leitura ÚNICA de Movimento_PA: saldo + idempotência + header ─────
+    // ── Leitura ÚNICA de Movimento_PA: idempotência + duplicidade + header ─
     const dadosSh     = sh.getDataRange().getValues();
     const header      = dadosSh[0];
     const linhasAntes = dadosSh.length;
-    const saldoMapa   = _saldosEmMemoria(dadosSh, header);
-    // Inclui estoque inicial para manter paridade com obterSaldoPA()
-    const estoqueIni  = _estoqueInicialPA(codOrigem);
-    const saldoOrigem = estoqueIni + (saldoMapa[codOrigem]||0);
+    // ESTOQUE_ATUAL (itemOri.saldo) — mesma fonte das telas (ver
+    // gravarMovimentoPA para o motivo de não somar o Movimento_PA aqui)
+    const saldoOrigem = itemOri.saldo;
     if (qtde > saldoOrigem) return { ok: false, mensagem: `Saldo insuficiente para ${codOrigem}. Disponível: ${saldoOrigem}.` };
 
     if (chaveIdem) {
@@ -1534,20 +1530,10 @@ function pagarOPTriangularPA(dados) {
       }
     }
 
-    // Busca descrições e endereços
-    const shCad   = _sh(NOME_ABA_CADASTRO_PA);
-    const dataCad = shCad ? shCad.getDataRange().getValues() : [];
-    const hCad    = dataCad[0] || [];
-    const iCodCad = _idxCol(hCad, 'CÓDIGO');
-    const iDescCad= hCad.findIndex(v => _norm(v) === 'descricao');
-    const iEndCad = hCad.findIndex(v => _norm(v) === 'endereco');
-    const findRow = (cod) => dataCad.slice(1).find(r => String(r[iCodCad]||'').trim() === cod);
-    const rowOri  = findRow(codOrigem);
-    const rowDes  = findRow(codDestino);
-    const descOri = (rowOri && iDescCad >= 0) ? String(rowOri[iDescCad]||'') : '';
-    const descDes = (rowDes && iDescCad >= 0) ? String(rowDes[iDescCad]||'') : '';
-    const endOri  = (rowOri && iEndCad  >= 0) ? String(rowOri[iEndCad] ||'') : '';
-    const endDes  = (rowDes && iEndCad  >= 0) ? String(rowDes[iEndCad] ||'') : '';
+    const descOri = itemOri.descricao || '';
+    const descDes = itemDes.descricao || '';
+    const endOri  = itemOri.endereco  || '';
+    const endDes  = itemDes.endereco  || '';
 
     const agora  = new Date();
     const base   = { qtde, op, usuario, computer, localizacao, ip, qrcode: '', chave: chaveIdem };
