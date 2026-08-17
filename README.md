@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @40 | Frontend: `7fe8ecd`+**
+**GAS ativo: @40 | Frontend: `47584a2`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,24 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-08-12
 
 ### ✅ Funcionando
+
+**🐛 Fix: Ajuste de Inventário usava saldo desatualizado do cache (2026-08-12)**
+- Reportado com print do Ajuste PA de `MCIP-515`: tela mostrava "Saldo
+  atual: 322", usuário digitou 165 (esperando SAÍDA de 157), backend
+  recusou com "Disponível: 102" — número que não batia com o que a tela
+  mostrava, gerando confusão
+- Causa: `abrirDetalheInsumo`/`abrirDetalhePA` buscam o saldo fresco (via
+  `obterEnderecosSaldo(PA)`) e atualizam só o texto na tela — nunca
+  gravavam esse valor de volta em `_itemAtual` nem no item dentro de
+  `insumoCache`/`paCache`. `abrirAjusteInventario` lia o saldo direto de
+  `_itemAtual.estoqueAtual`, que ficava com o valor antigo do cache
+- O backend sempre usou o saldo real e recusou corretamente — nada foi
+  gravado errado, o bug era só a exibição/cálculo do delta no frontend
+- Fix: ao resolver o fetch fresco, grava o saldo/endereço de volta no
+  objeto do cache (mesma referência) e em `_itemAtual`. Testado com
+  Playwright: cache "velho" com 322, fetch fresco mockado com 102 — após
+  abrir o detalhe, `_itemAtual`/cache/tela ficam com 102, e o Ajuste de
+  Inventário exibe 102 em vez de 322
 
 **🐛 Fix: modal voltou a ser bottom-sheet no celular (2026-08-12)**
 - Achado ao investigar um aviso do linter da IDE (`}` sem `@media{}`
