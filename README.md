@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @40 | Frontend: `47584a2`+**
+**GAS ativo: @40 | Frontend: `fd509d7`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -48,8 +48,19 @@ deploys no fim deste arquivo.
 
 ### ✅ Funcionando
 
-**🐛 Fix: Ajuste de Inventário usava saldo desatualizado do cache (2026-08-12)**
-- Reportado com print do Ajuste PA de `MCIP-515`: tela mostrava "Saldo
+**🐛 Fix: Ajuste de Inventário usava saldo desatualizado do cache (2026-08-12, 2 rodadas)**
+- ⚠️ **Rodada 2**: o mesmo erro voltou a acontecer com o mesmo `MCIP-515`
+  mesmo depois do fix abaixo, porque ele só cobria parte do problema — se
+  o usuário clicasse em "⚖️ Inventário" **rápido o suficiente** (antes do
+  fetch fresco do detalhe terminar), `abrirAjusteInventario` ainda lia o
+  saldo velho de `_itemAtual`. Fix definitivo: `abrirAjusteInventario`/
+  `_ajusteCarregar` agora sempre buscam o saldo fresco na hora de abrir o
+  Ajuste — enquanto isso, o saldo mostra "…" e o campo "Nova quantidade"
+  fica **desabilitado**, então fisicamente não dá pra digitar contra um
+  número que ainda pode estar errado. Testado com Playwright simulando a
+  corrida (fetch mockado com 400ms de atraso): confirmado que o campo só
+  libera depois que o valor bate com o real
+- **Rodada 1** (abaixo): reportado com print do Ajuste PA de `MCIP-515`: tela mostrava "Saldo
   atual: 322", usuário digitou 165 (esperando SAÍDA de 157), backend
   recusou com "Disponível: 102" — número que não batia com o que a tela
   mostrava, gerando confusão
