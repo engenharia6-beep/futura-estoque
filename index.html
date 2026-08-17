@@ -1485,7 +1485,7 @@ async function confirmarMovimentoPA() {
 // ══════════════════════════════════════════════════════
 let _ajusteCtx = null; // { tipoItem:'insumo'|'pa', codigo, saldoAtual, enderecoAtual, descricao }
 
-function abrirAjusteInventario(tipoItem) {
+async function abrirAjusteInventario(tipoItem) {
   if (!_itemAtual) return;
   const it = _itemAtual;
   _ajusteCtx = {
@@ -1508,9 +1508,15 @@ function abrirAjusteInventario(tipoItem) {
   _ajusteExibirInfo();
   fecharModal(tipoItem === 'pa' ? 'modal-pa' : 'modal-insumo');
   abrirModal('modal-ajuste-inv');
+
+  // Sempre revalida o saldo na hora de abrir o Ajuste — o valor do cache
+  // (mesmo já "atualizado" pelo detalhe) pode ter perdido a corrida se o
+  // usuário clicar rápido, e essa é uma tela que corrige contagem de
+  // estoque, então não pode confiar em número desatualizado
+  await _ajusteAtualizarSaldoFresco();
 }
 
-function _ajusteCarregar(val) {
+async function _ajusteCarregar(val) {
   const cod = (val || '').trim().toUpperCase();
   if (!cod) { document.getElementById('ajuste-info').style.display = 'none'; _ajusteCtx = null; return; }
 
@@ -1535,6 +1541,46 @@ function _ajusteCarregar(val) {
     fotoUrl:       it.fotoUrl    || '',
   };
   _ajusteExibirInfo();
+  await _ajusteAtualizarSaldoFresco();
+}
+
+// Busca o saldo/endereço direto do backend (sem cache) pro código atual do
+// Ajuste, e só libera a quantidade nova depois que o valor bate com a
+// verdade — evita "saldo insuficiente" com um número que não confere com
+// o que a tela mostrou (a validação final continua sendo do backend, isso
+// aqui só garante que o usuário está vendo o número certo antes de digitar)
+async function _ajusteAtualizarSaldoFresco() {
+  if (!_ajusteCtx) return;
+  const { codigo, tipoItem } = _ajusteCtx;
+  const saldoEl   = document.getElementById('ajuste-saldo-atual');
+  const qtdeInput = document.getElementById('ajuste-nova-qtde');
+  saldoEl.textContent = '…';
+  qtdeInput.disabled = true;
+  try {
+    const res = tipoItem === 'pa'
+      ? await api('obterEnderecosSaldoPA', { codigo })
+      : await api('obterEnderecosSaldo', { codigo });
+    if (!_ajusteCtx || _ajusteCtx.codigo !== codigo) return; // trocou de código enquanto carregava
+    const saldoFresco    = Number(res.saldo ?? _ajusteCtx.saldoAtual);
+    const enderecoFresco = res.enderecos?.[0]?.endereco || _ajusteCtx.enderecoAtual;
+    _ajusteCtx.saldoAtual    = saldoFresco;
+    _ajusteCtx.enderecoAtual = enderecoFresco;
+    // Atualiza cache + _itemAtual também, pra não reabrir esta mesma tela
+    // com o número velho de novo
+    const cache = tipoItem === 'pa' ? paCache : insumoCache;
+    const item  = cache.find(x => x.codigo === codigo);
+    if (item) { item.estoqueAtual = saldoFresco; item.endereco = enderecoFresco; }
+    if (_itemAtual && _itemAtual.codigo === codigo) {
+      _itemAtual.estoqueAtual = saldoFresco;
+      _itemAtual.endereco     = enderecoFresco;
+    }
+  } catch(e) { /* falhou a revalidação — segue com o último valor conhecido */ }
+  if (!_ajusteCtx || _ajusteCtx.codigo !== codigo) return;
+  saldoEl.textContent = _ajusteCtx.saldoAtual;
+  document.getElementById('ajuste-end-atual').textContent = _ajusteCtx.enderecoAtual ? `📍 ${_ajusteCtx.enderecoAtual}` : '';
+  document.getElementById('ajuste-endereco').value = _ajusteCtx.enderecoAtual;
+  qtdeInput.disabled = false;
+  _ajustePreview(); // recalcula caso o usuário já tenha digitado algo enquanto carregava
 }
 
 function _ajusteExibirInfo() {
