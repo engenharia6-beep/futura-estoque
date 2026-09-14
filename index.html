@@ -197,16 +197,6 @@
     #toast.err{background:#7f1d1d;color:#fff;border-color:rgba(220,38,38,.5)}
     #toast.warn{background:#78350f;color:#fff;border-color:rgba(217,119,6,.5)}
 
-    /* ── Dashboard ── */
-    .dashboard-grid{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .dash-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:8px}
-    .dash-card-icon{font-size:24px}
-    .dash-card-value{font-size:26px;font-weight:800;font-family:var(--mono)}
-    .dash-card-label{font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
-    .dash-card.accent{border-color:rgba(26,115,232,.35);background:rgba(26,115,232,.08)}
-    .dash-card.pa{border-color:rgba(15,110,86,.35);background:rgba(15,110,86,.08)}
-    .dash-card.warn{border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.06)}
-
     /* ── Foto do produto no detalhe ── */
     .detalhe-foto{width:100%;height:100%;object-fit:contain;border-radius:12px}
     .detalhe-foto-placeholder{width:100%;height:100%;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:40px;background:var(--bg);border:1px solid var(--border)}
@@ -402,20 +392,12 @@
 
     <!-- ══ DASHBOARD ══ -->
     <div id="page-dashboard" class="page">
-      <div style="padding:12px 16px 0;display:flex;align-items:center;justify-content:space-between">
+      <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
         <div>
           <div style="font-size:14px;font-weight:700;color:var(--text)" id="dash-usuario-nome"></div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Versão: <span id="dash-versao" style="font-family:var(--mono)"></span></div>
         </div>
-      </div>
-      <div class="section-header"><span class="section-title">Resumo</span>
-        <button class="btn btn-secondary btn-sm" onclick="recarregarDashboard()">↻ Atualizar</button>
-      </div>
-      <div class="dashboard-grid">
-        <div class="dash-card accent"><div class="dash-card-icon">📦</div><div class="dash-card-value" id="dash-total-insumos">—</div><div class="dash-card-label">Insumos ativos</div></div>
-        <div class="dash-card pa"><div class="dash-card-icon">🏭</div><div class="dash-card-value" id="dash-total-pa">—</div><div class="dash-card-label">PAs ativos</div></div>
-        <div class="dash-card warn"><div class="dash-card-icon">⚠️</div><div class="dash-card-value" id="dash-criticos" style="color:var(--warning)">—</div><div class="dash-card-label">Estoque crítico</div></div>
-        <div class="dash-card" style="cursor:pointer" onclick="navegar('ops')"><div class="dash-card-icon">📋</div><div class="dash-card-value" id="dash-ops">—</div><div class="dash-card-label">OPs abertas</div></div>
+        <button class="btn btn-secondary btn-sm" onclick="recarregarDashboard()" title="Limpa o cache de Insumos/PA em memória — use depois de uma movimentação pra garantir saldo atualizado ao reabrir essas telas">↻ Atualizar</button>
       </div>
     </div>
 
@@ -1062,7 +1044,6 @@ function navegar(pagina) {
   if (pagina === 'pa'         && !paCache.length)     carregarPA();
   if (pagina === 'ops')                               carregarOPS(false);
   if (pagina === 'movimentos')                        carregarMovimentos();
-  if (pagina === 'dashboard')                         carregarDashboard();
   if (pagina === 'bom')                               carregarBOM();
 }
 
@@ -1123,36 +1104,13 @@ function setBtn(id, disabled, html) { const b = document.getElementById(id); if(
 // ══════════════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════════════
-async function carregarDashboard() {
-  // Se Insumos/PA já foram abertos nesta sessão, os catálogos completos já
-  // estão em memória — calcula na hora, sem chamada nenhuma ao backend.
-  if (insumoCache.length && paCache.length) {
-    document.getElementById('dash-total-insumos').textContent = insumoCache.length;
-    document.getElementById('dash-total-pa').textContent      = paCache.length;
-    document.getElementById('dash-criticos').textContent =
-      insumoCache.filter(i => i.estoqueAtual <= (i.estoqueMin||0) && i.estoqueMin > 0).length;
-    return;
-  }
-  // Senão, pede só as 3 contagens em vez do catálogo inteiro (todas as
-  // colunas de ~1400 itens) — bem mais rápido.
-  try {
-    const res = await api('obterResumoDashboard');
-    document.getElementById('dash-total-insumos').textContent = res?.totalInsumos ?? 0;
-    document.getElementById('dash-total-pa').textContent      = res?.totalPA ?? 0;
-    document.getElementById('dash-criticos').textContent      = res?.criticos ?? 0;
-  } catch(e) {
-    document.getElementById('dash-total-insumos').textContent = '?';
-    document.getElementById('dash-total-pa').textContent      = '?';
-    document.getElementById('dash-criticos').textContent      = '?';
-  }
-}
-async function recarregarDashboard() {
+// Sem resumo/contagens na tela — o botão "Atualizar" só limpa o cache de
+// Insumos/PA em memória, forçando recarregar do backend na próxima vez que
+// essas telas (ou BOM/Ajuste) forem abertas. Existe pra compensar o fato de
+// uma movimentação feita agora não atualizar sozinha o que já está em cache.
+function recarregarDashboard() {
   insumoCache = []; paCache = [];
-  document.getElementById('dash-total-insumos').textContent = '…';
-  document.getElementById('dash-total-pa').textContent      = '…';
-  document.getElementById('dash-criticos').textContent      = '…';
-  await carregarDashboard();
-  toast('Dashboard atualizado');
+  toast('✔ Cache limpo — Insumos e PA vão recarregar na próxima vez que você abrir essas telas');
 }
 
 // ══════════════════════════════════════════════════════
@@ -1886,8 +1844,6 @@ async function carregarOPS(forcar = false) {
     const res = await api('listarOPS');
     opsCache  = Array.isArray(res) ? res : (res?.ops || []);
     renderOPS(opsCache);
-    const abertas = opsCache.filter(o => o.estado !== 'PAGO').length;
-    document.getElementById('dash-ops').textContent = abertas;
     if (!_refreshTimer) _iniciarAutoRefresh();
   } catch(e) {
     lista.innerHTML = `<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">Erro: ${esc(e.message)}</div></div>`;
