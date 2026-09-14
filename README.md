@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @43 | Frontend: `fd509d7`+**
+**GAS ativo: @43 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,9 +44,30 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-08-12
+## Estado atual — 2026-09-14
 
 ### ✅ Funcionando
+
+**🧹 Dashboard simplificado — sem resumo, só o botão Atualizar (2026-09-14)**
+- Os 4 cards do Dashboard (Insumos ativos, PAs ativos, Estoque crítico, OPs
+  abertas) não tinham utilidade no dia a dia — o único uso real dessa tela
+  era o botão "Atualizar", que limpa `insumoCache`/`paCache` em memória
+  pra forçar recarregar depois de uma movimentação (que não atualiza esse
+  cache sozinha)
+- Removidos: os 4 cards, o título "Resumo", `carregarDashboard()` (nada
+  mais pra exibir), a chamada em `navegar()`, e o CSS
+  `.dashboard-grid`/`.dash-card*` que ficou sem uso
+- Mantido: o botão "↻ Atualizar", com o mesmo efeito de sempre
+- Corrigido de quebra durante essa limpeza: `carregarOPS()` escrevia
+  direto em `document.getElementById('dash-ops').textContent` sem checar
+  null — com o card removido isso ia estourar erro toda vez que a lista de
+  OPs carregasse (inclusive no auto-refresh de 5 min). Essa contagem só
+  alimentava o card removido, então a linha saiu junto
+- `obterResumoDashboard` (backend) não foi tocada — fica sem uso mas não
+  compromete nada, evita precisar de um novo deploy do GAS só por isso
+- Testado com Playwright: Dashboard renderiza só nome+versão+botão;
+  Atualizar zera os 2 caches; navegar pra OPs depois disso renderiza a
+  lista normal, sem erros de console
 
 **🐛 Fix: PA validava saldo contra a fonte errada — causa raiz real (2026-08-12, deploy @43)**
 - Reportado 3x com o mesmo item (`MCIP-515`): tela sempre mostrava "Saldo
