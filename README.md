@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @59 | Frontend: `af93151`+**
+**GAS ativo: @60 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -79,12 +79,14 @@ deploys no fim deste arquivo.
   de 2–3 redundantes
 - Backup: tag git `backup-pre-fase1b-gravacao` (aponta pro commit `4c31b57`
   / deploy `@58`), com passo a passo de reversão na mensagem da tag
-- **Achado à parte, não corrigido nesta passada**: `mudarEndereco`/
-  `mudarEnderecoPA` continuam lendo o `Cadastro`/`Cadastro_PA` original
-  inteiro pra achar a linha a atualizar (é uma escrita na aba original, não
-  dá pra apontar só pro Resumo) — mais lento que precisaria ser, mas não é
-  o fluxo que foi reportado. Ganharam a sincronização do resumo depois de
-  escrever, mas a leitura de busca da linha em si não foi otimizada
+- **Fase 1c (2026-09-29, deploy @60)**: usuário confirmou que "Alterar
+  Endereço" também estava lento (~30s só pra achar o código e gravar).
+  `mudarEndereco`/`mudarEnderecoPA` escrevem na aba original (dona do
+  campo Endereço, não dá pra apontar pro Resumo), mas liam a aba inteira
+  com `getDataRange()` só pra achar a linha do código. Passaram a ler só a
+  coluna CÓDIGO (texto puro, sem fórmula) via `getRange` — evita puxar as
+  colunas com fórmula (`ESTOQUE_ATUAL`, `XLOOKUP`, etc.) só pra descobrir o
+  número da linha
 - Teste de latência automatizado (scratchpad) não deu números confiáveis
   desta vez — a rede deste ambiente de execução teve respostas 404/lentas
   intermitentes ao chamar o endpoint logo após o deploy (mesmo padrão de
@@ -531,12 +533,6 @@ código.
   sincroniza o resumo depois de salvar. Mitigação enquanto isso não é feito:
   rodar `popularResumoInsumo`/`popularResumoPA` periodicamente como rede de
   segurança.
-- **`mudarEndereco`/`mudarEnderecoPA` — leitura ainda lenta** (achado
-  2026-09-29) — essas 2 funções escrevem direto no `Cadastro`/`Cadastro_PA`
-  original (é o dono do campo Endereço, não dá pra apontar só pro Resumo) e
-  pra isso ainda leem a aba inteira com fórmula só pra achar a linha do
-  código. Não é o fluxo que motivou a Fase 1b, mas seria o próximo alvo se
-  "Trocar endereço" também estiver lento na prática.
 - **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
   — `alterarSenha`, `salvarCadastro`, `salvarCadastroPA`,
   `obterFormulasInsumo`, `obterFormulasPA`, `obterSaldo`, `obterSaldoPA`,
@@ -627,4 +623,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @56 | Fase 1, fix: `_linhaResumoNaOrdem` virou case-insensitive (cabeçalho "ID" vs campo "id" não batia, coluna ficava vazia); colunas de texto do resumo ganham formato "Plain text" (Sheets estava auto-convertendo string tipo "0.00499" pra número errado, por causa do "." ser separador de milhar no locale pt-BR) — ver "Estado atual" |
 | @57 | diagnóstico temporário (`_diagCampoInsumo`) pra investigar `#NUM!` em `estoqueInicial` — campo confirmado sem uso pelo app, investigação encerrada a pedido do usuário |
 | @58 | limpeza — remove `_diagCampoInsumo`, volta ao estado funcional do @56 |
-| @59 | ✅ **ATIVO** — Fase 1b (perf): `_mapaCadastroInfo`, `obterSaldo(PA)`, `obterEnderecosSaldo(PA)` passam a ler do Resumo em vez do Cadastro original; sincronização do resumo fechada em `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`, `pagarOPTriangularPA`, `gravarBaixaInsumos`, `mudarEndereco(PA)` — ver "Estado atual" |
+| @59 | Fase 1b (perf): `_mapaCadastroInfo`, `obterSaldo(PA)`, `obterEnderecosSaldo(PA)` passam a ler do Resumo em vez do Cadastro original; sincronização do resumo fechada em `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`, `pagarOPTriangularPA`, `gravarBaixaInsumos`, `mudarEndereco(PA)` — ver "Estado atual" |
+| @60 | ✅ **ATIVO** — Fase 1c (perf): `mudarEndereco`/`mudarEnderecoPA` passam a ler só a coluna CÓDIGO em vez da aba inteira pra achar a linha — ver "Estado atual" |
