@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @56 | Frontend: `af93151`+**
+**GAS ativo: @59 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,49 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-09-29
 
 ### ✅ Funcionando
+
+**⚡ Fase 1b de performance — caminho de GRAVAÇÃO também lendo do Resumo (2026-09-29, deploy @59)**
+- Reportado: tela de Ajuste de Inventário (Insumo) levou 65s pra carregar o
+  saldo ao abrir + 60s pra gravar ao confirmar. Usuário confirmou que o
+  mesmo acontece em "todas as funções (troca de insumo, entrada, saída,
+  inventário, etc)"
+- Causa raiz: a Fase 1 só acelerou as telas de **listagem**
+  (`listarCadastro`/`listarCadastroPA`). O caminho de **gravação/validação**
+  continuava lendo `Cadastro`/`Cadastro_PA` (com fórmula) inteiros a cada
+  chamada — `_mapaCadastroInfo()` (usada em 8 pontos: `gravarMovimento`,
+  `gravarMovimentoPA`, `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`,
+  `pagarOPTriangularPA`, `gravarBaixaInsumos`) e as 4 funções de saldo
+  (`obterSaldo`, `obterSaldoPA`, `obterEnderecosSaldo`,
+  `obterEnderecosSaldoPA`, usadas pela tela de Ajuste pra revalidar o saldo
+  ao abrir). Um único ciclo de Ajuste chegava a ler o Cadastro inteiro 3x
+  (abrir tela + validar gravação + sincronizar resumo)
+- Fix: essas 5 funções passam a ler `Cadastro_Resumo`/`Cadastro_PA_Resumo`
+  em vez do original — mesma técnica da Fase 1, aplicada agora no caminho
+  de escrita. `_mapaCadastroInfo` resolve a aba resumo internamente, então
+  os 8 pontos que a chamam não precisaram mudar
+- Pré-requisito de correção fechado junto: como a validação de "saldo
+  insuficiente" passa a confiar no Resumo, os caminhos que ainda não
+  sincronizavam (e por isso podiam deixar o Resumo desatualizado) ganharam
+  a chamada de sincronização: `gravarMovimentosEmLote`/`PA` (BOM, baixa de
+  insumos), `transferirCodigo`/`PA`, `pagarOPTriangularPA`,
+  `gravarBaixaInsumos`, `mudarEndereco`/`PA`
+- A sincronização em si (`_sincronizarResumoInsumo`/`PA`) continua lendo o
+  Cadastro original inteiro (inevitável — precisa do valor já calculado
+  pela fórmula) — o ganho é ter só **essa 1 leitura** por gravação, em vez
+  de 2–3 redundantes
+- Backup: tag git `backup-pre-fase1b-gravacao` (aponta pro commit `4c31b57`
+  / deploy `@58`), com passo a passo de reversão na mensagem da tag
+- **Achado à parte, não corrigido nesta passada**: `mudarEndereco`/
+  `mudarEnderecoPA` continuam lendo o `Cadastro`/`Cadastro_PA` original
+  inteiro pra achar a linha a atualizar (é uma escrita na aba original, não
+  dá pra apontar só pro Resumo) — mais lento que precisaria ser, mas não é
+  o fluxo que foi reportado. Ganharam a sincronização do resumo depois de
+  escrever, mas a leitura de busca da linha em si não foi otimizada
+- Teste de latência automatizado (scratchpad) não deu números confiáveis
+  desta vez — a rede deste ambiente de execução teve respostas 404/lentas
+  intermitentes ao chamar o endpoint logo após o deploy (mesmo padrão de
+  flakiness pós-deploy já visto antes, não é bug do código). Validação real
+  fica por conta do usuário testando a tela de Ajuste em produção
 
 **⚡ Fase 1 de performance — abas resumo Cadastro_Resumo/Cadastro_PA_Resumo (2026-09-29)**
 - Contexto: login/dashboard/PA/Insumos estavam lentos (até 21s no pior caso)
@@ -480,18 +523,28 @@ código.
 
 ### 📋 Assuntos em aberto
 
-- **Fase 1 (abas resumo) — cobertura de sincronização incompleta**
-  (2026-09-29) — só `gravarMovimento`/`gravarMovimentoPA` sincronizam o
-  resumo hoje. Ainda faltam: `gravarMovimentosEmLote`/`gravarMovimentosEmLotePA`
-  (baixa em lote via BOM), `gravarBaixaInsumos`, `pagarOPTriangularPA`,
-  `transferirCodigo`/`transferirCodigoPA`, `salvarItemCadastro`/
-  `salvarItemCadastroPA` (criar/editar cadastro) e `mudarEndereco`/
-  `mudarEnderecoPA`. Até cobrir esses caminhos, um movimento feito por eles
-  não atualiza `Cadastro_Resumo`/`Cadastro_PA_Resumo` na hora — só na
-  próxima vez que `popularResumoInsumo`/`popularResumoPA` rodar (hoje é
-  manual, sem gatilho automático). Mitigação enquanto isso não é feito:
-  rodar `popularResumoInsumo`/`popularResumoPA` periodicamente (ex: 1x por
-  dia) como rede de segurança.
+- **Fase 1 (abas resumo) — cobertura de sincronização, o que falta**
+  (atualizado 2026-09-29, deploy @59) — a Fase 1b fechou a sincronização de
+  `gravarMovimentosEmLote`/`PA`, `gravarBaixaInsumos`, `pagarOPTriangularPA`,
+  `transferirCodigo`/`PA` e `mudarEndereco`/`PA`. Ainda falta:
+  `salvarItemCadastro`/`salvarItemCadastroPA` (criar/editar cadastro) — não
+  sincroniza o resumo depois de salvar. Mitigação enquanto isso não é feito:
+  rodar `popularResumoInsumo`/`popularResumoPA` periodicamente como rede de
+  segurança.
+- **`mudarEndereco`/`mudarEnderecoPA` — leitura ainda lenta** (achado
+  2026-09-29) — essas 2 funções escrevem direto no `Cadastro`/`Cadastro_PA`
+  original (é o dono do campo Endereço, não dá pra apontar só pro Resumo) e
+  pra isso ainda leem a aba inteira com fórmula só pra achar a linha do
+  código. Não é o fluxo que motivou a Fase 1b, mas seria o próximo alvo se
+  "Trocar endereço" também estiver lento na prática.
+- **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
+  — `alterarSenha`, `salvarCadastro`, `salvarCadastroPA`,
+  `obterFormulasInsumo`, `obterFormulasPA`, `obterSaldo`, `obterSaldoPA`,
+  `listarEmbarque`, `gravarEntradaDI`. Mesmo padrão do `obterResumoDashboard`
+  (ver entrada de 2026-09-14) — provavelmente telas antigas removidas do
+  app sem limpar o backend correspondente. Não afeta performance (código
+  que nunca executa), fica registrado pra uma limpeza futura se fizer
+  sentido.
 - **Fase 2 (login) ainda não feita** — mesmo depois da Fase 1, medições
   indicam que parte da lentidão vem de só *abrir* a planilha (afeta até o
   login, que não toca `Cadastro`/`Cadastro_PA`). Precisa investigar
@@ -571,4 +624,7 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @53 | limpeza — remove todas as funções de teste temporário, volta ao estado exato do @43 |
 | @54 | Fase 1 (perf) — cria a infraestrutura das abas resumo: `_extrairCamposResumoInsumo/PA`, `_popularResumoInsumo/PA`, `_sincronizarResumoInsumo/PA` |
 | @55 | Fase 1 — `listarCadastro`/`listarCadastroPA` passam a ler de `Cadastro_Resumo`/`Cadastro_PA_Resumo` em vez do Cadastro original; `gravarMovimento`/`gravarMovimentoPA` passam a sincronizar o resumo ao gravar |
-| @56 | ✅ **ATIVO** — Fase 1, fix: `_linhaResumoNaOrdem` virou case-insensitive (cabeçalho "ID" vs campo "id" não batia, coluna ficava vazia); colunas de texto do resumo ganham formato "Plain text" (Sheets estava auto-convertendo string tipo "0.00499" pra número errado, por causa do "." ser separador de milhar no locale pt-BR) — ver "Estado atual" |
+| @56 | Fase 1, fix: `_linhaResumoNaOrdem` virou case-insensitive (cabeçalho "ID" vs campo "id" não batia, coluna ficava vazia); colunas de texto do resumo ganham formato "Plain text" (Sheets estava auto-convertendo string tipo "0.00499" pra número errado, por causa do "." ser separador de milhar no locale pt-BR) — ver "Estado atual" |
+| @57 | diagnóstico temporário (`_diagCampoInsumo`) pra investigar `#NUM!` em `estoqueInicial` — campo confirmado sem uso pelo app, investigação encerrada a pedido do usuário |
+| @58 | limpeza — remove `_diagCampoInsumo`, volta ao estado funcional do @56 |
+| @59 | ✅ **ATIVO** — Fase 1b (perf): `_mapaCadastroInfo`, `obterSaldo(PA)`, `obterEnderecosSaldo(PA)` passam a ler do Resumo em vez do Cadastro original; sincronização do resumo fechada em `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`, `pagarOPTriangularPA`, `gravarBaixaInsumos`, `mudarEndereco(PA)` — ver "Estado atual" |

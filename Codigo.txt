@@ -204,15 +204,22 @@ function _mapaEstoqueAtualCadastro(nomeAba) {
 // separadamente, relendo a mesma aba 2-3x na mesma chamada.
 function _mapaCadastroInfo(nomeAba) {
   try {
-    const sh = _sh(nomeAba);
+    // Fase 1b (perf): lê da aba Resumo (sem fórmula) em vez da Cadastro/
+    // Cadastro_PA original — essa função é chamada por TODA gravação do
+    // sistema (Ajuste, Entrada, Saída, Transferência, Triangular, Baixa de
+    // BOM/Insumos), então era o maior gargalo de escrita do app.
+    const nomeResumo = nomeAba === NOME_ABA_CADASTRO ? NOME_ABA_CADASTRO_RESUMO
+                      : nomeAba === NOME_ABA_CADASTRO_PA ? NOME_ABA_CADASTRO_PA_RESUMO
+                      : nomeAba;
+    const sh = _sh(nomeResumo);
     if (!sh) return {};
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD  = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
-    const iSIT  = _idxCol(h, 'Situação');
-    const iEND  = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
-    const iEA   = _idxCol(h, 'ESTOQUE_ATUAL');
-    const iDESC = _idxCol(h, 'DESCRIÇÃO') >= 0 ? _idxCol(h, 'DESCRIÇÃO') : _idxCol(h, 'DESCRICAO');
+    const iCOD  = _idxCol(h, 'codigo');
+    const iSIT  = _idxCol(h, 'situacao');
+    const iEND  = _idxCol(h, 'endereco');
+    const iEA   = _idxCol(h, 'estoqueAtual');
+    const iDESC = _idxCol(h, 'descricao');
     const mapa = {};
     if (iCOD < 0) return mapa;
     for (let i = 1; i < data.length; i++) {
@@ -1080,12 +1087,14 @@ function listarMovimentos() {
 // item (tamanho fixo), Movimento cresce para sempre a cada transação.
 function obterSaldo(codigo) {
   try {
-    const sh   = _sh(NOME_ABA_CADASTRO);
+    // Fase 1b (perf): lê do Cadastro_Resumo (sem fórmula) — antes lia o
+    // Cadastro original inteiro (com fórmula) só pra 1 código.
+    const sh   = _sh(NOME_ABA_CADASTRO_RESUMO);
     if (!sh) return 0;
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO');
-    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iCOD = _idxCol(h, 'codigo');
+    const iEA  = _idxCol(h, 'estoqueAtual');
     if (iCOD < 0 || iEA < 0) return 0;
     const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
     return row ? Number(row[iEA]||0) : 0;
@@ -1093,18 +1102,18 @@ function obterSaldo(codigo) {
 }
 
 // Endereço é fixo por item (Cadastro, coluna D) — não varia por movimento.
-// Retorna { saldo, enderecos:[{endereco,saldo}] } lendo só o Cadastro, sem
-// tocar em Movimento. Mantém o mesmo formato de resposta de antes (lista de
-// 1 endereço no máximo) para não exigir mudança no frontend.
+// Retorna { saldo, enderecos:[{endereco,saldo}] } lendo do Cadastro_Resumo
+// (Fase 1b perf), sem tocar em Movimento. Mantém o mesmo formato de resposta
+// de antes (lista de 1 endereço no máximo) para não exigir mudança no frontend.
 function obterEnderecosSaldo(codigo) {
   try {
-    const sh = _sh(NOME_ABA_CADASTRO);
+    const sh = _sh(NOME_ABA_CADASTRO_RESUMO);
     if (!sh) return { saldo: 0, enderecos: [] };
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO');
-    const iEND = _idxCol(h, 'Endereço');
-    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iCOD = _idxCol(h, 'codigo');
+    const iEND = _idxCol(h, 'endereco');
+    const iEA  = _idxCol(h, 'estoqueAtual');
     if (iCOD < 0) return { saldo: 0, enderecos: [] };
     const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
     if (!row) return { saldo: 0, enderecos: [] };
@@ -1252,6 +1261,8 @@ function transferirCodigo(dados) {
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
     const verif = _verificarGravacao(sh, [idOut, idIn], linhasAntes);
     if (!verif.ok) return { ok: false, mensagem: 'Transferência não confirmada. ' + (verif.erro||'') };
+    _sincronizarResumoInsumo(codOrigem);  // Fase 1b (perf): mantém Cadastro_Resumo em dia
+    _sincronizarResumoInsumo(codDestino);
     return { ok: true, gravados: linhas.length };
   } catch(e) { return { ok: false, mensagem: 'Erro na transferência: ' + e.message }; }
 }
@@ -1318,6 +1329,11 @@ function gravarMovimentosEmLote(movimentos) {
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
     SpreadsheetApp.flush();
+    // Fase 1b (perf): mantém Cadastro_Resumo em dia pros códigos baixados em lote
+    // (BOM, baixa de insumos via PA) — sem isso o saldo usado nas próximas
+    // validações (_mapaCadastroInfo lê o Resumo) ficaria desatualizado.
+    [...new Set(movimentos.map(m => String(m.codigo||'').trim()).filter(Boolean))]
+      .forEach(_sincronizarResumoInsumo);
     return { ok: true, gravados: ids.length };
   } catch(e) { return { ok: false, mensagem: 'Erro lote: ' + e.message }; }
 }
@@ -1350,29 +1366,31 @@ function listarMovimentosPA() {
 // em vez de somar ESTOQUE_INICIAL + histórico inteiro de Movimento_PA.
 function obterSaldoPA(codigo) {
   try {
-    const sh   = _sh(NOME_ABA_CADASTRO_PA);
+    // Fase 1b (perf): lê do Cadastro_PA_Resumo (sem fórmula) — antes lia o
+    // Cadastro_PA original inteiro (com fórmula) só pra 1 código.
+    const sh   = _sh(NOME_ABA_CADASTRO_PA_RESUMO);
     if (!sh) return 0;
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
-    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iCOD = _idxCol(h, 'codigo');
+    const iEA  = _idxCol(h, 'estoqueAtual');
     if (iCOD < 0 || iEA < 0) return 0;
     const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
     return row ? Number(row[iEA]||0) : 0;
   } catch(e) { return 0; }
 }
 
-// Endereço é fixo por item (Cadastro_PA, coluna F) — lê só o Cadastro_PA,
-// sem tocar em Movimento_PA. Mesmo formato de resposta de antes.
+// Endereço é fixo por item (Cadastro_PA, coluna F) — lê do Cadastro_PA_Resumo
+// (Fase 1b perf), sem tocar em Movimento_PA. Mesmo formato de resposta de antes.
 function obterEnderecosSaldoPA(codigo) {
   try {
-    const sh = _sh(NOME_ABA_CADASTRO_PA);
+    const sh = _sh(NOME_ABA_CADASTRO_PA_RESUMO);
     if (!sh) return { saldo: 0, enderecos: [] };
     const data = sh.getDataRange().getValues();
     const h    = data[0];
-    const iCOD = _idxCol(h, 'CÓDIGO') >= 0 ? _idxCol(h, 'CÓDIGO') : _idxCol(h, 'CODIGO');
-    const iEND = _idxCol(h, 'Endereço') >= 0 ? _idxCol(h, 'Endereço') : _idxCol(h, 'ENDEREÇO_PA');
-    const iEA  = _idxCol(h, 'ESTOQUE_ATUAL');
+    const iCOD = _idxCol(h, 'codigo');
+    const iEND = _idxCol(h, 'endereco');
+    const iEA  = _idxCol(h, 'estoqueAtual');
     if (iCOD < 0) return { saldo: 0, enderecos: [] };
     const row = data.slice(1).find(r => String(r[iCOD]||'').trim() === String(codigo).trim());
     if (!row) return { saldo: 0, enderecos: [] };
@@ -1567,6 +1585,8 @@ function transferirCodigoPA(dados) {
     shPA.getRange(linhasAntes + 1, 1, linhas.length, headerPA.length).setValues(linhas);
     const verif = _verificarGravacao(shPA, [idOut, idIn], linhasAntes);
     if (!verif.ok) return { ok: false, mensagem: 'Transferência PA não confirmada. ' + (verif.erro||'') };
+    _sincronizarResumoPA(codOrigem);  // Fase 1b (perf): mantém Cadastro_PA_Resumo em dia
+    _sincronizarResumoPA(codDestino);
     return { ok: true, gravados: linhas.length };
   } catch(e) { return { ok: false, mensagem: 'Erro na transferência PA: ' + e.message }; }
 }
@@ -1634,6 +1654,9 @@ function gravarMovimentosEmLotePA(movimentos) {
     if (!linhas.length) return { ok: true, gravados: 0 };
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
     SpreadsheetApp.flush();
+    // Fase 1b (perf): mantém Cadastro_PA_Resumo em dia pros códigos baixados em lote
+    [...new Set(movimentos.map(m => String(m.codigo||'').trim()).filter(Boolean))]
+      .forEach(_sincronizarResumoPA);
     return { ok: true, gravados: ids.length };
   } catch(e) { return { ok: false, mensagem: 'Erro lote PA: ' + e.message }; }
 }
@@ -1718,6 +1741,8 @@ function pagarOPTriangularPA(dados) {
     ];
     sh.getRange(linhasAntes + 1, 1, linhas.length, header.length).setValues(linhas);
     SpreadsheetApp.flush();
+    _sincronizarResumoPA(codOrigem);  // Fase 1b (perf): mantém Cadastro_PA_Resumo em dia
+    _sincronizarResumoPA(codDestino);
 
     // Baixa dos insumos do produto DESTINO NÃO é feita aqui — o frontend controla,
     // via modal de confirmação de insumos (mesmo padrão de gravarMovimentoPA).
@@ -2001,6 +2026,7 @@ function mudarEndereco(dados) {
     const rowIdx = data.slice(1).findIndex(r => String(r[iCOD]||'').trim() === codigo);
     if (rowIdx < 0) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
     sh.getRange(rowIdx + 2, iEND + 1).setValue(novoEndereco);
+    _sincronizarResumoInsumo(codigo);  // Fase 1b (perf): mantém Cadastro_Resumo em dia
     return { ok: true, mensagem: 'Endereço atualizado!' };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
@@ -2020,6 +2046,7 @@ function mudarEnderecoPA(dados) {
     const rowIdx = data.slice(1).findIndex(r => String(r[iCOD]||'').trim() === codigo);
     if (rowIdx < 0) return { ok: false, mensagem: `Item PA '${codigo}' não encontrado.` };
     sh.getRange(rowIdx + 2, iEND + 1).setValue(novoEndereco);
+    _sincronizarResumoPA(codigo);  // Fase 1b (perf): mantém Cadastro_PA_Resumo em dia
     return { ok: true, mensagem: 'Endereço PA atualizado!' };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
@@ -2245,6 +2272,9 @@ function gravarBaixaInsumos(itens, dadosBase) {
     const ultimaLinha = shMov.getLastRow();
     shMov.getRange(ultimaLinha + 1, 1, linhas.length, header.length).setValues(linhas);
     SpreadsheetApp.flush();
+    // Fase 1b (perf): mantém Cadastro_Resumo em dia pros insumos baixados
+    [...new Set(paraGravar.map(it => String(it.codigoInsumo || it.codigo || '').trim()).filter(Boolean))]
+      .forEach(_sincronizarResumoInsumo);
 
     return { ok: true, gravados: linhas.length, avisos };
   } catch(e) { return { ok: false, mensagem: 'Erro ao gravar insumos: ' + e.message }; }
