@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @43 | Frontend: `af93151`+**
+**GAS ativo: @56 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,9 +44,51 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-09-14
+## Estado atual — 2026-09-29
 
 ### ✅ Funcionando
+
+**⚡ Fase 1 de performance — abas resumo Cadastro_Resumo/Cadastro_PA_Resumo (2026-09-29)**
+- Contexto: login/dashboard/PA/Insumos estavam lentos (até 21s no pior caso)
+  porque `Cadastro`/`Cadastro_PA` têm quase toda coluna com fórmula
+  (`ESTOQUE_ATUAL`, `XLOOKUP` cruzando abas, etc.) — mesmo uma leitura
+  "só de valores" (`getValues()`) precisa que o Sheets já tenha calculado
+  tudo antes de devolver, então "só ler" nunca foi barato nessa planilha
+- Criadas 2 abas novas **sem fórmula nenhuma** (só valor fixo):
+  `Cadastro_Resumo` (19 campos) e `Cadastro_PA_Resumo` (13 campos) — os
+  mesmos campos que `listarCadastro`/`listarCadastroPA` já devolviam antes,
+  então o frontend não mudou nada
+- `listarCadastro`/`listarCadastroPA` passam a ler dessas abas resumo em
+  vez do Cadastro original. Medido sem cache, filtro "ATIVO" (o padrão do
+  app): Insumos 12,7s → 6,8s (1119 itens), PA 4,7s → 3,0s (576 itens) —
+  melhora real, mas **não elimina** a lentidão sozinha, porque parte do
+  custo é só *abrir* a planilha (afeta até o login, que nem toca
+  Cadastro/Cadastro_PA) — ver "Assuntos em aberto"
+- `gravarMovimento`/`gravarMovimentoPA` (Entrada/Saída/Ajuste manual —
+  os fluxos mais usados) passam a sincronizar a linha do resumo
+  correspondente logo depois de gravar o movimento, lendo o valor já
+  calculado do Cadastro/Cadastro_PA (1 linha só, bem mais barato que ler
+  tudo) e escrevendo como valor fixo no resumo
+- **Cobertura ainda parcial** — baixa em lote via BOM
+  (`gravarMovimentosEmLote(PA)`, `gravarBaixaInsumos`), Triangular
+  (`pagarOPTriangularPA`), Transferir Código
+  (`transferirCodigo`/`transferirCodigoPA`) e edição direta de cadastro
+  (`salvarItemCadastro(PA)`, `mudarEndereco(PA)`) **ainda não**
+  sincronizam o resumo — um movimento gravado por esses caminhos deixa o
+  resumo desatualizado até a próxima chamada de `popularResumoInsumo`/
+  `popularResumoPA` (população completa, ação administrativa, não
+  automática). Entra numa passada seguinte.
+- 2 bugs achados e corrigidos durante a implementação: (1) comparação de
+  nome de coluna sensível a maiúscula/minúscula deixava o campo `id`
+  sempre vazio; (2) Sheets auto-convertia string numérica (ex: `obs` com
+  valor tipo `"0.00499"`) pra número errado, porque no locale pt-BR desta
+  planilha `.` é separador de milhar — corrigido formatando as colunas de
+  texto do resumo como "Plain text" antes de escrever
+- Testado: 1360 Insumos e 884 PA comparados campo a campo contra o
+  resultado anterior (via fórmula) — 0 divergências, 0 faltando
+- Backup do estado 100% operacional anterior a essa mudança: tag git
+  `backup-pre-fase1-resumo` (aponta pro commit `4ae83e7` / deploy `@53`),
+  com o passo a passo de reversão de backend e frontend na mensagem da tag
 
 **🧹 Dashboard simplificado — sem resumo, só o botão Atualizar (2026-09-14)**
 - Os 4 cards do Dashboard (Insumos ativos, PAs ativos, Estoque crítico, OPs
@@ -438,6 +480,23 @@ código.
 
 ### 📋 Assuntos em aberto
 
+- **Fase 1 (abas resumo) — cobertura de sincronização incompleta**
+  (2026-09-29) — só `gravarMovimento`/`gravarMovimentoPA` sincronizam o
+  resumo hoje. Ainda faltam: `gravarMovimentosEmLote`/`gravarMovimentosEmLotePA`
+  (baixa em lote via BOM), `gravarBaixaInsumos`, `pagarOPTriangularPA`,
+  `transferirCodigo`/`transferirCodigoPA`, `salvarItemCadastro`/
+  `salvarItemCadastroPA` (criar/editar cadastro) e `mudarEndereco`/
+  `mudarEnderecoPA`. Até cobrir esses caminhos, um movimento feito por eles
+  não atualiza `Cadastro_Resumo`/`Cadastro_PA_Resumo` na hora — só na
+  próxima vez que `popularResumoInsumo`/`popularResumoPA` rodar (hoje é
+  manual, sem gatilho automático). Mitigação enquanto isso não é feito:
+  rodar `popularResumoInsumo`/`popularResumoPA` periodicamente (ex: 1x por
+  dia) como rede de segurança.
+- **Fase 2 (login) ainda não feita** — mesmo depois da Fase 1, medições
+  indicam que parte da lentidão vem de só *abrir* a planilha (afeta até o
+  login, que não toca `Cadastro`/`Cadastro_PA`). Precisa investigar
+  separado — ver conversa/plano da Fase 2 (retry automático em timeout no
+  frontend + medir de novo depois da Fase 1).
 - **`ESTOQUE_ATUAL` do PA pode ficar dessincronizado do `Movimento_PA`
   (visto em 2026-08-12)** — a fórmula de `ESTOQUE_ATUAL` em `Cadastro_PA`
   não deriva só do `Movimento_PA`; qualquer correção de saldo feita fora
@@ -507,4 +566,9 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @39 | feat: transferirCodigo/transferirCodigoPA — transferência de saldo (total ou parcial) de um código pro outro, mesmo tipo (Insumo→Insumo, PA→PA) |
 | @40 | feat: listarOPS lê a coluna CLIENTE (P) da aba OPS — quem fez o pedido, exibido no card da OP pra equipe de estoque saber a quem entregar |
 | @41-@42 | diagnóstico temporário (removido) — investigar divergência entre ESTOQUE_ATUAL e a soma do Movimento_PA |
-| @43 | ✅ **ATIVO** — fix: gravarMovimentoPA/gravarMovimentosEmLotePA/pagarOPTriangularPA passam a validar saldo contra ESTOQUE_ATUAL (mesma fonte das telas), não contra a soma do Movimento_PA — ver "Estado atual" |
+| @43 | fix: gravarMovimentoPA/gravarMovimentosEmLotePA/pagarOPTriangularPA passam a validar saldo contra ESTOQUE_ATUAL (mesma fonte das telas), não contra a soma do Movimento_PA |
+| @44-@52 | investigação temporária (removida) — teste de ARRAYFORMULA vs fórmula por linha; abandonado por bloqueio de permissão ao criar/escrever em planilha externa (não resolvido) |
+| @53 | limpeza — remove todas as funções de teste temporário, volta ao estado exato do @43 |
+| @54 | Fase 1 (perf) — cria a infraestrutura das abas resumo: `_extrairCamposResumoInsumo/PA`, `_popularResumoInsumo/PA`, `_sincronizarResumoInsumo/PA` |
+| @55 | Fase 1 — `listarCadastro`/`listarCadastroPA` passam a ler de `Cadastro_Resumo`/`Cadastro_PA_Resumo` em vez do Cadastro original; `gravarMovimento`/`gravarMovimentoPA` passam a sincronizar o resumo ao gravar |
+| @56 | ✅ **ATIVO** — Fase 1, fix: `_linhaResumoNaOrdem` virou case-insensitive (cabeçalho "ID" vs campo "id" não batia, coluna ficava vazia); colunas de texto do resumo ganham formato "Plain text" (Sheets estava auto-convertendo string tipo "0.00499" pra número errado, por causa do "." ser separador de milhar no locale pt-BR) — ver "Estado atual" |
