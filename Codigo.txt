@@ -679,6 +679,7 @@ function _formatarColunasTextoResumo(sh, headerResumo) {
   });
 }
 
+
 // População completa (1x, ou como rede de segurança periódica): lê TODO o
 // Cadastro/Cadastro_PA (com fórmula, custo cheio) e sobrescreve a aba resumo
 // inteira. Usar com moderação — é a operação "lenta" que estamos tentando
