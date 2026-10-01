@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @64 | Frontend: `af93151`+**
+**GAS ativo: @65 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -573,9 +573,11 @@ código.
   sincronizar, mas são 2 das 9 rotas sem chamador no frontend (ver abaixo) —
   não é usado na prática hoje. Único gap real que sobra: **exclusão de
   linha** direto na planilha, em qualquer uma das 4 abas (nem `onEdit` cobre
-  isso de forma confiável). Mitigação: `_repovoarResumoDiario` (deploy @64) —
-  **pendente de ativação**: precisa rodar `_instalarGatilhoDiarioResumo()`
-  uma vez pelo editor do Apps Script pra instalar o gatilho diário.
+  isso de forma confiável). Mitigação: `_repovoarResumoDiario` (deploy @64,
+  fix de escopo no @65) — **ainda pendente de ativação**: precisa rodar
+  `_instalarGatilhoDiarioResumo()` uma vez pelo editor do Apps Script pra
+  instalar o gatilho diário (1ª tentativa falhou por escopo faltando,
+  corrigido no @65 — precisa rodar de novo e reautorizar).
 - **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
   — `alterarSenha`, `salvarCadastro`, `salvarCadastroPA`,
   `obterFormulasInsumo`, `obterFormulasPA`, `obterSaldo`, `obterSaldoPA`,
@@ -671,4 +673,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @61 | diagnóstico temporário (`_diagListarAbas`) — levanta todas as abas da planilha p/ plano de migração de banco. Ainda ativo (não é destrutivo, só leitura) |
 | @62 | gatilho `onEdit` sincroniza Resumo em edição manual no Cadastro/Cadastro_PA (filtrado por coluna relevante); `_sincronizarResumoInsumo`/`PA` otimizadas (busca só a coluna CÓDIGO, não a aba inteira) |
 | @63 | `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) |
-| @64 | ✅ **ATIVO** — `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — precisa rodar `_instalarGatilhoDiarioResumo()` uma vez pelo editor pra ativar o gatilho — ver "Estado atual" |
+| @64 | `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — ao tentar instalar, erro "Specified permissions are not sufficient... script.scriptapp" (escopo faltando no manifesto) |
+| @65 | ✅ **ATIVO** — fix: adiciona `https://www.googleapis.com/auth/script.scriptapp` em `appsscript.json` (necessário pra `ScriptApp.newTrigger`/`getProjectTriggers`/`deleteTrigger`) — precisa reautorizar ao rodar `_instalarGatilhoDiarioResumo()` de novo, escopo novo sempre pede consentimento — ver "Estado atual" |
