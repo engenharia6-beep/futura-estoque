@@ -848,52 +848,97 @@ const _COLS_RESUMO_PA = ['ID','FOTO_SHEETS','Endereço_Foto','ENDEREÇO_PA','End
   'CODIGO','DESCRIÇÃO','DESCRICAO','FAMILIA','FAMÍLIA','ESTOQUE_ATUAL','Estoque_Minimo',
   'Situação','CHAVE','obs','U$ Unit.','R$ Unit.'];
 
+// Colunas de Movimento/Movimento_PA que podem mudar o saldo calculado
+// (ESTOQUE_ATUAL em Cadastro é fórmula que deriva do histórico de
+// Movimento) — usadas pelo onEdit() quando a correção de quantidade é
+// feita direto ali (adicionar/editar/excluir linha de movimento), em vez
+// de editar o Cadastro. Colunas puramente informativas (Usuario, OBS, IP,
+// Localizacao, Data, OP, QRCode, CHAVE_) não entram — não afetam o saldo.
+const _COLS_MOVIMENTO_AFETA_SALDO = ['Codigo', 'Tipo', 'Qtde'];
+
 // Gatilho simples (nome exato "onEdit" — instalado automaticamente pelo
 // Apps Script, sem configuração manual). Dispara em TODA edição manual feita
 // por um humano na planilha (edição programática via script, tipo
 // mudarEndereco, NÃO dispara isso — só UI). Resolve o problema de
-// Cadastro_Resumo/Cadastro_PA_Resumo ficarem desatualizados quando alguém
-// cadastra item novo ou corrige quantidade direto na planilha, sem passar
-// pelo app.
+// Cadastro_Resumo/Cadastro_PA_Resumo ficarem desatualizados quando alguém:
+// (a) cadastra item novo ou corrige um campo direto no Cadastro/Cadastro_PA;
+// (b) adiciona, edita ou corrige uma linha direto em Movimento/Movimento_PA
+//     (o jeito real como a quantidade costuma ser corrigida — a fórmula do
+//     Cadastro reage sozinha, só o Resumo que ficava cego pra isso).
 //
-// Limitação conhecida: NÃO cobre exclusão de linha (apagar uma linha
-// inteira não dá informação confiável pro onEdit identificar o que sumiu).
+// Limitação conhecida: NÃO cobre EXCLUSÃO de linha em nenhuma das duas
+// (apagar uma linha inteira não dá informação confiável pro onEdit
+// identificar o que sumiu — o código já se foi quando o evento dispara).
 // Rede de segurança pra esse caso: popularResumoInsumo/PA periódico.
 function onEdit(e) {
   try {
     if (!e || !e.range) return;
     const sh   = e.range.getSheet();
     const nome = sh.getName();
-    const ehInsumo = nome === NOME_ABA_CADASTRO;
-    const ehPA     = nome === NOME_ABA_CADASTRO_PA;
-    if (!ehInsumo && !ehPA) return; // ignora as outras ~20 abas da planilha
-
-    const colunas = ehInsumo ? _COLS_RESUMO_INSUMO : _COLS_RESUMO_PA;
-    const header  = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    const colsRelevantes = new Set();
-    colunas.forEach(nomeCol => { const i = _idxCol(header, nomeCol); if (i >= 0) colsRelevantes.add(i + 1); });
-    if (!colsRelevantes.size) return;
-
-    const colIni = e.range.getColumn();
-    const colFim = colIni + e.range.getNumColumns() - 1;
-    let tocouColunaRelevante = false;
-    for (let c = colIni; c <= colFim; c++) { if (colsRelevantes.has(c)) { tocouColunaRelevante = true; break; } }
-    if (!tocouColunaRelevante) return; // só mexeu em coluna que o Resumo não usa (ex: ZPL, QRCODE)
-
-    const iCOD = _idxCol(header, 'CÓDIGO') >= 0 ? _idxCol(header, 'CÓDIGO') : _idxCol(header, 'CODIGO');
-    if (iCOD < 0) return;
-
-    const linhaIni = Math.max(e.range.getRow(), 2); // nunca sincroniza o cabeçalho
-    const linhaFim = e.range.getRow() + e.range.getNumRows() - 1;
-    const codigosVistos = new Set();
-    for (let linha = linhaIni; linha <= linhaFim; linha++) {
-      const codigo = String(sh.getRange(linha, iCOD + 1).getValue() || '').trim();
-      if (!codigo || codigosVistos.has(codigo)) continue;
-      codigosVistos.add(codigo);
-      if (ehInsumo) _sincronizarResumoInsumo(codigo, linha);
-      else          _sincronizarResumoPA(codigo, linha);
+    if (nome === NOME_ABA_CADASTRO || nome === NOME_ABA_CADASTRO_PA) {
+      _onEditCadastro(e, sh, nome === NOME_ABA_CADASTRO);
+    } else if (nome === NOME_ABA_MOVIMENTO || nome === NOME_ABA_MOVIMENTO_PA) {
+      _onEditMovimento(e, sh, nome === NOME_ABA_MOVIMENTO);
     }
+    // qualquer outra aba (são ~20 nessa planilha) é ignorada
   } catch(err) { /* nunca deixa o gatilho quebrar a edição do usuário na planilha */ }
+}
+
+function _onEditCadastro(e, sh, ehInsumo) {
+  const colunas = ehInsumo ? _COLS_RESUMO_INSUMO : _COLS_RESUMO_PA;
+  const header  = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const colsRelevantes = new Set();
+  colunas.forEach(nomeCol => { const i = _idxCol(header, nomeCol); if (i >= 0) colsRelevantes.add(i + 1); });
+  if (!colsRelevantes.size) return;
+
+  const colIni = e.range.getColumn();
+  const colFim = colIni + e.range.getNumColumns() - 1;
+  let tocouColunaRelevante = false;
+  for (let c = colIni; c <= colFim; c++) { if (colsRelevantes.has(c)) { tocouColunaRelevante = true; break; } }
+  if (!tocouColunaRelevante) return; // só mexeu em coluna que o Resumo não usa (ex: ZPL, QRCODE)
+
+  const iCOD = _idxCol(header, 'CÓDIGO') >= 0 ? _idxCol(header, 'CÓDIGO') : _idxCol(header, 'CODIGO');
+  if (iCOD < 0) return;
+
+  const linhaIni = Math.max(e.range.getRow(), 2); // nunca sincroniza o cabeçalho
+  const linhaFim = e.range.getRow() + e.range.getNumRows() - 1;
+  const codigosVistos = new Set();
+  for (let linha = linhaIni; linha <= linhaFim; linha++) {
+    const codigo = String(sh.getRange(linha, iCOD + 1).getValue() || '').trim();
+    if (!codigo || codigosVistos.has(codigo)) continue;
+    codigosVistos.add(codigo);
+    if (ehInsumo) _sincronizarResumoInsumo(codigo, linha); // linha já é a linha do Cadastro
+    else          _sincronizarResumoPA(codigo, linha);
+  }
+}
+
+function _onEditMovimento(e, sh, ehInsumo) {
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const colsRelevantes = new Set();
+  _COLS_MOVIMENTO_AFETA_SALDO.forEach(nomeCol => { const i = _idxCol(header, nomeCol); if (i >= 0) colsRelevantes.add(i + 1); });
+  if (!colsRelevantes.size) return;
+
+  const colIni = e.range.getColumn();
+  const colFim = colIni + e.range.getNumColumns() - 1;
+  let tocouColunaRelevante = false;
+  for (let c = colIni; c <= colFim; c++) { if (colsRelevantes.has(c)) { tocouColunaRelevante = true; break; } }
+  if (!tocouColunaRelevante) return; // só mexeu em coluna que não muda saldo (ex: OBS, Usuario)
+
+  const iCOD = _idxCol(header, 'codigo');
+  if (iCOD < 0) return;
+
+  const linhaIni = Math.max(e.range.getRow(), 2);
+  const linhaFim = e.range.getRow() + e.range.getNumRows() - 1;
+  const codigosVistos = new Set();
+  for (let linha = linhaIni; linha <= linhaFim; linha++) {
+    const codigo = String(sh.getRange(linha, iCOD + 1).getValue() || '').trim();
+    if (!codigo || codigosVistos.has(codigo)) continue;
+    codigosVistos.add(codigo);
+    // Sem linha conhecida no Cadastro aqui (só sabemos a linha em Movimento) —
+    // busca pelo código (já otimizado: só a coluna CÓDIGO, não a aba inteira).
+    if (ehInsumo) _sincronizarResumoInsumo(codigo);
+    else          _sincronizarResumoPA(codigo);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
