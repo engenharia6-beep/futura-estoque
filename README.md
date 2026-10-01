@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @63 | Frontend: `af93151`+**
+**GAS ativo: @64 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -71,14 +71,17 @@ deploys no fim deste arquivo.
   "sem linha conhecida" (usado pelas outras ~10 chamadas, ex: `gravarMovimento`)
   também passou a buscar só a coluna CÓDIGO em vez da aba inteira com fórmula
   — mesma técnica da Fase 1c, agora aplicada aqui também
-- **Limitação conhecida**: não cobre exclusão de linha em nenhuma das duas
-  abas (apagar uma linha inteira — de `Cadastro`/`PA` ou de `Movimento`/`PA`
-  — não dá informação confiável pro `onEdit` saber qual código sumiu, já que
-  o dado não existe mais quando o evento dispara). Rede de segurança
-  continua sendo `popularResumoInsumo`/`popularResumoPA` periódico — hoje
-  isso ainda é manual (rota HTTP), não tem gatilho automático instalado;
-  considerar automatizar (ex: diário) se exclusão de linha for algo
-  frequente na prática
+- **Limitação conhecida, agora coberta por rede de segurança diária
+  (deploy @64)**: `onEdit` não cobre exclusão de linha em nenhuma das 4
+  abas (apagar uma linha inteira não dá informação confiável sobre qual
+  código sumiu, já que o dado não existe mais quando o evento dispara).
+  Usuário confirmou que isso acontece, embora raro — então
+  `_repovoarResumoDiario()` roda via gatilho instalável 1x por dia (~3h,
+  fuso do script) repopulando os dois Resumos por completo, cobrindo esse
+  caso dentro de até 24h. Instalado rodando `_instalarGatilhoDiarioResumo()`
+  uma vez pelo editor do Apps Script (gatilho por tempo não se autoinstala
+  só pelo nome da função, diferente do `onEdit`) — idempotente, seguro
+  rodar de novo se precisar recriar
 - Gatilho simples roda só com edição feita por humano na UI — edição
   programática via script (ex: `mudarEndereco` escrevendo o endereço) não
   dispara o `onEdit`, então não há dupla-sincronização
@@ -561,7 +564,7 @@ código.
 ### 📋 Assuntos em aberto
 
 - **Fase 1 (abas resumo) — cobertura de sincronização, o que falta**
-  (atualizado 2026-10-01, deploy @63) — a Fase 1b fechou
+  (atualizado 2026-10-01, deploy @64) — a Fase 1b fechou
   `gravarMovimentosEmLote`/`PA`, `gravarBaixaInsumos`, `pagarOPTriangularPA`,
   `transferirCodigo`/`PA` e `mudarEndereco`/`PA`; o `onEdit` (deploy @62/@63)
   fechou edição manual direto no Cadastro/Cadastro_PA e em Movimento/
@@ -570,10 +573,9 @@ código.
   sincronizar, mas são 2 das 9 rotas sem chamador no frontend (ver abaixo) —
   não é usado na prática hoje. Único gap real que sobra: **exclusão de
   linha** direto na planilha, em qualquer uma das 4 abas (nem `onEdit` cobre
-  isso de forma confiável — o código já não existe mais quando o evento
-  dispara). Mitigação: rodar `popularResumoInsumo`/`popularResumoPA`
-  periodicamente como rede de segurança — hoje é manual, sem gatilho
-  automático instalado.
+  isso de forma confiável). Mitigação: `_repovoarResumoDiario` (deploy @64) —
+  **pendente de ativação**: precisa rodar `_instalarGatilhoDiarioResumo()`
+  uma vez pelo editor do Apps Script pra instalar o gatilho diário.
 - **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
   — `alterarSenha`, `salvarCadastro`, `salvarCadastroPA`,
   `obterFormulasInsumo`, `obterFormulasPA`, `obterSaldo`, `obterSaldoPA`,
@@ -668,4 +670,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @60 | Fase 1c (perf): `mudarEndereco`/`mudarEnderecoPA` passam a ler só a coluna CÓDIGO em vez da aba inteira pra achar a linha — ver "Estado atual" |
 | @61 | diagnóstico temporário (`_diagListarAbas`) — levanta todas as abas da planilha p/ plano de migração de banco. Ainda ativo (não é destrutivo, só leitura) |
 | @62 | gatilho `onEdit` sincroniza Resumo em edição manual no Cadastro/Cadastro_PA (filtrado por coluna relevante); `_sincronizarResumoInsumo`/`PA` otimizadas (busca só a coluna CÓDIGO, não a aba inteira) |
-| @63 | ✅ **ATIVO** — `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) — ver "Estado atual" |
+| @63 | `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) |
+| @64 | ✅ **ATIVO** — `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — precisa rodar `_instalarGatilhoDiarioResumo()` uma vez pelo editor pra ativar o gatilho — ver "Estado atual" |

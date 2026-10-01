@@ -737,6 +737,35 @@ function _popularResumoPA() {
   return { ok: true, linhas: linhas.length };
 }
 
+// Rede de segurança pro único gap que o onEdit não cobre: exclusão de linha
+// em Cadastro/Cadastro_PA/Movimento/Movimento_PA (o código já não existe
+// mais quando o evento de edição dispara, então não dá pra saber o que
+// sincronizar na hora). Repovoa os dois Resumos por completo 1x por dia —
+// chamada pelo gatilho instalado por _instalarGatilhoDiarioResumo().
+function _repovoarResumoDiario() {
+  try { _popularResumoInsumo(); } catch(e) { /* não deixa 1 falha derrubar a outra */ }
+  try { _popularResumoPA(); } catch(e) { /* idem */ }
+}
+
+// Rode esta função UMA VEZ pelo editor do Apps Script (Executar >
+// _instalarGatilhoDiarioResumo) pra instalar o gatilho diário — ela mesma
+// não faz nada sozinha depois disso, só existe pra criar o gatilho
+// instalável (diferente do onEdit, gatilho por tempo precisa ser criado
+// explicitamente, não é reconhecido só pelo nome da função).
+// É seguro rodar mais de uma vez — remove qualquer gatilho antigo da mesma
+// função antes de criar um novo, pra nunca duplicar.
+function _instalarGatilhoDiarioResumo() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === '_repovoarResumoDiario')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('_repovoarResumoDiario')
+    .timeBased()
+    .everyDays(1)
+    .atHour(3) // horário de baixo uso — fuso do script (America/Manaus)
+    .create();
+  return { ok: true, mensagem: 'Gatilho diário instalado — roda todo dia por volta das 3h.' };
+}
+
 // DIAGNÓSTICO TEMPORÁRIO (remover depois de usar) — levanta todas as abas
 // da planilha (inclusive as que o código nunca toca) com nome, linhas,
 // colunas e cabeçalho, pra servir de base a um plano de migração de banco.
