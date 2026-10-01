@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @60 | Frontend: `af93151`+**
+**GAS ativo: @62 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,31 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-09-29
 
 ### ✅ Funcionando
+
+**🔄 onEdit — Cadastro_Resumo/Cadastro_PA_Resumo sincronizam sozinhas em edição manual (2026-10-01, deploy @62)**
+- Reportado: produto novo cadastrado direto na planilha, ou quantidade
+  corrigida direto na planilha, não aparecia no Resumo — porque o Resumo só
+  era atualizado quando a gravação passava pelo app (`gravarMovimento` etc.);
+  edição manual na planilha não tem como avisar o app de que algo mudou
+- Fix: gatilho simples `onEdit(e)` (reconhecido automaticamente pelo Apps
+  Script, sem instalação manual) dispara em toda edição humana em `Cadastro`
+  ou `Cadastro_PA`. Filtra por coluna antes de sincronizar — só reage se a
+  coluna editada é uma das ~19/13 que alimentam o Resumo (ex: editar `ZPL`,
+  `QRCODE`, `SUFRAMA_NCM` não dispara nada, porque o Resumo nem usa esses
+  campos); cobre tanto corrigir um valor quanto cadastrar uma linha nova
+- De brinde: como o `onEdit` já sabe a linha exata editada, não precisa mais
+  escanear a aba inteira pra achar o código — `_sincronizarResumoInsumo`/`PA`
+  ganharam um parâmetro opcional `linhaConhecida` pra esse caso, e o caminho
+  "sem linha conhecida" (usado pelas outras ~10 chamadas, ex: `gravarMovimento`)
+  também passou a buscar só a coluna CÓDIGO em vez da aba inteira com fórmula
+  — mesma técnica da Fase 1c, agora aplicada aqui também
+- **Limitação conhecida**: não cobre exclusão de linha (apagar uma linha
+  inteira não dá informação confiável pro `onEdit` saber o que sumiu). Rede
+  de segurança continua sendo `popularResumoInsumo`/`popularResumoPA`
+  periódico
+- Gatilho simples roda só com edição feita por humano na UI — edição
+  programática via script (ex: `mudarEndereco` escrevendo o endereço) não
+  dispara o `onEdit`, então não há dupla-sincronização
 
 **⚡ Fase 1b de performance — caminho de GRAVAÇÃO também lendo do Resumo (2026-09-29, deploy @59)**
 - Reportado: tela de Ajuste de Inventário (Insumo) levou 65s pra carregar o
@@ -526,11 +551,14 @@ código.
 ### 📋 Assuntos em aberto
 
 - **Fase 1 (abas resumo) — cobertura de sincronização, o que falta**
-  (atualizado 2026-09-29, deploy @59) — a Fase 1b fechou a sincronização de
+  (atualizado 2026-10-01, deploy @62) — a Fase 1b fechou
   `gravarMovimentosEmLote`/`PA`, `gravarBaixaInsumos`, `pagarOPTriangularPA`,
-  `transferirCodigo`/`PA` e `mudarEndereco`/`PA`. Ainda falta:
-  `salvarItemCadastro`/`salvarItemCadastroPA` (criar/editar cadastro) — não
-  sincroniza o resumo depois de salvar. Mitigação enquanto isso não é feito:
+  `transferirCodigo`/`PA` e `mudarEndereco`/`PA`; o `onEdit` (deploy @62)
+  fechou edição manual direto na planilha (cadastrar item novo, corrigir
+  quantidade). `salvarItemCadastro`/`salvarItemCadastroPA` continuam sem
+  sincronizar, mas são 2 das 9 rotas sem chamador no frontend (ver abaixo) —
+  não é usado na prática hoje. Único gap real que sobra: exclusão de linha
+  direto na planilha (nem `onEdit` cobre isso de forma confiável). Mitigação:
   rodar `popularResumoInsumo`/`popularResumoPA` periodicamente como rede de
   segurança.
 - **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
@@ -624,4 +652,6 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @57 | diagnóstico temporário (`_diagCampoInsumo`) pra investigar `#NUM!` em `estoqueInicial` — campo confirmado sem uso pelo app, investigação encerrada a pedido do usuário |
 | @58 | limpeza — remove `_diagCampoInsumo`, volta ao estado funcional do @56 |
 | @59 | Fase 1b (perf): `_mapaCadastroInfo`, `obterSaldo(PA)`, `obterEnderecosSaldo(PA)` passam a ler do Resumo em vez do Cadastro original; sincronização do resumo fechada em `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`, `pagarOPTriangularPA`, `gravarBaixaInsumos`, `mudarEndereco(PA)` — ver "Estado atual" |
-| @60 | ✅ **ATIVO** — Fase 1c (perf): `mudarEndereco`/`mudarEnderecoPA` passam a ler só a coluna CÓDIGO em vez da aba inteira pra achar a linha — ver "Estado atual" |
+| @60 | Fase 1c (perf): `mudarEndereco`/`mudarEnderecoPA` passam a ler só a coluna CÓDIGO em vez da aba inteira pra achar a linha — ver "Estado atual" |
+| @61 | diagnóstico temporário (`_diagListarAbas`) — levanta todas as abas da planilha p/ plano de migração de banco. Ainda ativo (não é destrutivo, só leitura) |
+| @62 | ✅ **ATIVO** — gatilho `onEdit` sincroniza Resumo em edição manual na planilha (filtrado por coluna relevante); `_sincronizarResumoInsumo`/`PA` otimizadas (busca só a coluna CÓDIGO, não a aba inteira) — ver "Estado atual" |

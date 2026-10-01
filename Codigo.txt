@@ -384,6 +384,9 @@ function doPost(e) {
       'popularResumoInsumo':    () => _popularResumoInsumo(),
       'popularResumoPA':        () => _popularResumoPA(),
 
+      // ── DIAGNÓSTICO TEMPORÁRIO — levantamento de abas p/ plano de migração ─
+      'diagListarAbas':         () => _diagListarAbas(),
+
       // ── Embarque / DI ─────────────────────────────────────────────────────
       'listarEmbarque':         () => listarEmbarque(),
       'gravarEntradaDI':        () => gravarEntradaDI(dados),
@@ -734,19 +737,56 @@ function _popularResumoPA() {
   return { ok: true, linhas: linhas.length };
 }
 
+// DIAGNÓSTICO TEMPORÁRIO (remover depois de usar) — levanta todas as abas
+// da planilha (inclusive as que o código nunca toca) com nome, linhas,
+// colunas e cabeçalho, pra servir de base a um plano de migração de banco.
+// Só leitura de metadados/cabeçalho — não abre range com fórmula.
+function _diagListarAbas() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const resultado = {
+      ok: true,
+      abas: ss.getSheets().map(sh => {
+        const linhas = sh.getLastRow();
+        const colunas = sh.getLastColumn();
+        const header = linhas > 0 && colunas > 0
+          ? sh.getRange(1, 1, 1, colunas).getValues()[0].map(v => String(v || '').trim()).filter(Boolean)
+          : [];
+        return { nome: sh.getName(), linhas, colunas, header };
+      }),
+    };
+    // Também loga no Registro de execução — pra rodar direto pelo editor
+    // do Apps Script (Executar > _diagListarAbas) sem depender do fetch HTTP.
+    console.log(JSON.stringify(resultado, null, 2));
+    return resultado;
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
 // Sincroniza 1 código só — chamado ao final de uma gravação (depois do
-// flush(), pra já ler o Cadastro com a fórmula assentada). Atualiza a linha
-// se o código já existe no resumo, ou adiciona uma linha nova se não existe.
-function _sincronizarResumoInsumo(codigo) {
+// flush(), pra já ler o Cadastro com a fórmula assentada), ou pelo onEdit()
+// quando alguém edita direto na planilha. `linhaConhecida` (1-based, opcional)
+// evita escanear a aba inteira quando quem chamou já sabe a linha (onEdit) —
+// sem ela, busca só a coluna CÓDIGO (texto puro) em vez de getDataRange()
+// inteiro, pra não forçar cálculo de fórmula nas ~15 mil linhas do Cadastro.
+// Atualiza a linha se o código já existe no resumo, ou adiciona uma nova.
+function _sincronizarResumoInsumo(codigo, linhaConhecida) {
   try {
     const shOrigem = _sh(NOME_ABA_CADASTRO);
     const shResumo = _sh(NOME_ABA_CADASTRO_RESUMO);
     if (!shOrigem || !shResumo) return;
-    const dataOrigem = shOrigem.getDataRange().getValues();
-    const hOrigem     = dataOrigem[0];
-    const iCodOrigem  = _idxCol(hOrigem, 'CÓDIGO');
-    const rowOrigem   = dataOrigem.slice(1).find(r => String(r[iCodOrigem]||'').trim().toUpperCase() === String(codigo).trim().toUpperCase());
-    if (!rowOrigem) return; // código não existe no Cadastro — nada a sincronizar
+    const hOrigem = shOrigem.getRange(1, 1, 1, shOrigem.getLastColumn()).getValues()[0];
+    let rowOrigem;
+    if (linhaConhecida) {
+      rowOrigem = shOrigem.getRange(linhaConhecida, 1, 1, hOrigem.length).getValues()[0];
+    } else {
+      const iCodOrigem = _idxCol(hOrigem, 'CÓDIGO');
+      const lastRow = shOrigem.getLastRow();
+      if (iCodOrigem < 0 || lastRow < 2) return;
+      const colCod = shOrigem.getRange(2, iCodOrigem + 1, lastRow - 1, 1).getValues();
+      const idx = colCod.findIndex(r => String(r[0]||'').trim().toUpperCase() === String(codigo).trim().toUpperCase());
+      if (idx < 0) return; // código não existe no Cadastro — nada a sincronizar
+      rowOrigem = shOrigem.getRange(idx + 2, 1, 1, hOrigem.length).getValues()[0];
+    }
 
     const campos = _extrairCamposResumoInsumo(hOrigem, rowOrigem);
     const dataResumo   = shResumo.getDataRange().getValues();
@@ -763,16 +803,24 @@ function _sincronizarResumoInsumo(codigo) {
   } catch(e) { /* não deixa a sincronização derrubar a gravação principal */ }
 }
 
-function _sincronizarResumoPA(codigo) {
+function _sincronizarResumoPA(codigo, linhaConhecida) {
   try {
     const shOrigem = _sh(NOME_ABA_CADASTRO_PA);
     const shResumo = _sh(NOME_ABA_CADASTRO_PA_RESUMO);
     if (!shOrigem || !shResumo) return;
-    const dataOrigem = shOrigem.getDataRange().getValues();
-    const hOrigem     = dataOrigem[0];
-    const iCodOrigem  = _idxCol(hOrigem, 'CÓDIGO') >= 0 ? _idxCol(hOrigem, 'CÓDIGO') : _idxCol(hOrigem, 'CODIGO');
-    const rowOrigem   = dataOrigem.slice(1).find(r => String(r[iCodOrigem]||'').trim().toUpperCase() === String(codigo).trim().toUpperCase());
-    if (!rowOrigem) return;
+    const hOrigem = shOrigem.getRange(1, 1, 1, shOrigem.getLastColumn()).getValues()[0];
+    let rowOrigem;
+    if (linhaConhecida) {
+      rowOrigem = shOrigem.getRange(linhaConhecida, 1, 1, hOrigem.length).getValues()[0];
+    } else {
+      const iCodOrigem = _idxCol(hOrigem, 'CÓDIGO') >= 0 ? _idxCol(hOrigem, 'CÓDIGO') : _idxCol(hOrigem, 'CODIGO');
+      const lastRow = shOrigem.getLastRow();
+      if (iCodOrigem < 0 || lastRow < 2) return;
+      const colCod = shOrigem.getRange(2, iCodOrigem + 1, lastRow - 1, 1).getValues();
+      const idx = colCod.findIndex(r => String(r[0]||'').trim().toUpperCase() === String(codigo).trim().toUpperCase());
+      if (idx < 0) return;
+      rowOrigem = shOrigem.getRange(idx + 2, 1, 1, hOrigem.length).getValues()[0];
+    }
 
     const campos = _extrairCamposResumoPA(hOrigem, rowOrigem);
     const dataResumo   = shResumo.getDataRange().getValues();
@@ -787,6 +835,65 @@ function _sincronizarResumoPA(codigo) {
       shResumo.appendRow(linha);
     }
   } catch(e) { /* não deixa a sincronização derrubar a gravação principal */ }
+}
+
+// Colunas do Cadastro/Cadastro_PA que alimentam algum campo do Resumo — têm
+// que bater com o que _extrairCamposResumoInsumo/PA lê. Usadas só pelo
+// onEdit() pra decidir se vale a pena sincronizar (ex: editar QRCODE/ZPL/
+// SUFRAMA_NCM não muda nada no Resumo, então nem dispara a gravação).
+const _COLS_RESUMO_INSUMO = ['ID','Endereço_Foto','Endereço','CÓDIGO','DESCRIÇÃO','TIPO',
+  'NOMECURTO','UNIDADE','UIDADE_MEDIDA','ESTOQUE_INICIAL','ESTOQUE_ATUAL','Estoque_Minimo',
+  'Estoque_ Segurança','Ponto_Pedido','obs','Situação','U$ Unit.','R$ Unit.','Peso_Unitário','CHAVE'];
+const _COLS_RESUMO_PA = ['ID','FOTO_SHEETS','Endereço_Foto','ENDEREÇO_PA','Endereço','CÓDIGO',
+  'CODIGO','DESCRIÇÃO','DESCRICAO','FAMILIA','FAMÍLIA','ESTOQUE_ATUAL','Estoque_Minimo',
+  'Situação','CHAVE','obs','U$ Unit.','R$ Unit.'];
+
+// Gatilho simples (nome exato "onEdit" — instalado automaticamente pelo
+// Apps Script, sem configuração manual). Dispara em TODA edição manual feita
+// por um humano na planilha (edição programática via script, tipo
+// mudarEndereco, NÃO dispara isso — só UI). Resolve o problema de
+// Cadastro_Resumo/Cadastro_PA_Resumo ficarem desatualizados quando alguém
+// cadastra item novo ou corrige quantidade direto na planilha, sem passar
+// pelo app.
+//
+// Limitação conhecida: NÃO cobre exclusão de linha (apagar uma linha
+// inteira não dá informação confiável pro onEdit identificar o que sumiu).
+// Rede de segurança pra esse caso: popularResumoInsumo/PA periódico.
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    const sh   = e.range.getSheet();
+    const nome = sh.getName();
+    const ehInsumo = nome === NOME_ABA_CADASTRO;
+    const ehPA     = nome === NOME_ABA_CADASTRO_PA;
+    if (!ehInsumo && !ehPA) return; // ignora as outras ~20 abas da planilha
+
+    const colunas = ehInsumo ? _COLS_RESUMO_INSUMO : _COLS_RESUMO_PA;
+    const header  = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const colsRelevantes = new Set();
+    colunas.forEach(nomeCol => { const i = _idxCol(header, nomeCol); if (i >= 0) colsRelevantes.add(i + 1); });
+    if (!colsRelevantes.size) return;
+
+    const colIni = e.range.getColumn();
+    const colFim = colIni + e.range.getNumColumns() - 1;
+    let tocouColunaRelevante = false;
+    for (let c = colIni; c <= colFim; c++) { if (colsRelevantes.has(c)) { tocouColunaRelevante = true; break; } }
+    if (!tocouColunaRelevante) return; // só mexeu em coluna que o Resumo não usa (ex: ZPL, QRCODE)
+
+    const iCOD = _idxCol(header, 'CÓDIGO') >= 0 ? _idxCol(header, 'CÓDIGO') : _idxCol(header, 'CODIGO');
+    if (iCOD < 0) return;
+
+    const linhaIni = Math.max(e.range.getRow(), 2); // nunca sincroniza o cabeçalho
+    const linhaFim = e.range.getRow() + e.range.getNumRows() - 1;
+    const codigosVistos = new Set();
+    for (let linha = linhaIni; linha <= linhaFim; linha++) {
+      const codigo = String(sh.getRange(linha, iCOD + 1).getValue() || '').trim();
+      if (!codigo || codigosVistos.has(codigo)) continue;
+      codigosVistos.add(codigo);
+      if (ehInsumo) _sincronizarResumoInsumo(codigo, linha);
+      else          _sincronizarResumoPA(codigo, linha);
+    }
+  } catch(err) { /* nunca deixa o gatilho quebrar a edição do usuário na planilha */ }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
