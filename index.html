@@ -776,10 +776,9 @@
           <div class="card-icon">🔄</div>
           <div class="card-label">Triangular</div>
         </div>
-        <div class="op-tipo-card" onclick="escolherTipoPagamento('sinalizar')" style="border-color:#e8d8a8">
-          <div class="card-icon">✍️</div>
-          <div class="card-label">Sem retirar estoque</div>
-        </div>
+      </div>
+      <div style="text-align:center;padding-top:4px">
+        <span style="font-size:11px;color:var(--text-muted)">Material já em processo sem retirar estoque? Escolha "Via BOM" ou "Via PA Direto" — tem a opção de sinalizar sem baixar dentro de cada tela.</span>
       </div>
     </div>
   </div>
@@ -844,7 +843,7 @@
     <div class="modal-footer" style="flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="fecharModal('modal-baixa-pa-op')">Cancelar</button>
       <button class="btn btn-pa btn-full" id="btn-confirmar-bpa" onclick="confirmarBaixaPAOp()">🏭 Confirmar Baixa PA</button>
-      <button style="width:100%;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOP()">
+      <button style="width:100%;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOP({isPA:true, codigo:_opAtual?.codigo, descricao:_opAtual?.descricao})">
         ✍️ Sinalizar OP sem retirar estoque
       </button>
     </div>
@@ -917,7 +916,7 @@
           ✔ Confirmar e Gravar
         </button>
       </div>
-      <button id="btn-sinalizar-bom" style="display:none;width:100%;margin-top:8px;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOP()">
+      <button id="btn-sinalizar-bom" style="display:none;width:100%;margin-top:8px;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOPViaBOM()">
         ✍️ Sinalizar OP sem retirar estoque
       </button>
     </div>
@@ -2060,7 +2059,6 @@ async function escolherTipoPagamento(tipo) {
   if (tipo === 'bom')        { await abrirModalBOM(); return; }
   if (tipo === 'pa')         { abrirBaixaPAOp(); return; }
   if (tipo === 'triangular') { abrirTriangular(); return; }
-  if (tipo === 'sinalizar')  { abrirSinalizarOP(); return; }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2202,13 +2200,34 @@ async function confirmarBaixaPAOp() {
 // ══════════════════════════════════════════════════════
 //  SINALIZAR OP SEM RETIRAR ESTOQUE
 // ══════════════════════════════════════════════════════
-function abrirSinalizarOP() {
-  if (!_opAtual) return;
+// ctx = { isPA, codigo, descricao } — o código tem que ser válido no
+// cadastro certo (PA usa o código do próprio produto; Insumo usa um dos
+// itens da BOM já carregada, nunca o código do produto — ele não existe
+// como insumo). Cada tela que chama isso já sabe montar o ctx certo.
+let _sinalizarCtx = null;
+
+// Chamado pelo botão dentro da tela "BOM — OP X": o código do produto (ex:
+// DM2P-728) não existe como insumo, então usa o 1º item da lista de insumos
+// já carregada ali (só serve pra "validar a OP" no Movimento — não precisa
+// ser um item específico, qualquer um do BOM identifica a OP).
+function abrirSinalizarOPViaBOM() {
+  const primeiro = document.getElementById('ins-qtde-0');
+  if (!primeiro) { toast('Lista de insumos ainda não carregou.', 'warn'); return; }
+  abrirSinalizarOP({
+    isPA: primeiro.dataset.tipomov === 'PA', // BOM pode ter item PA misturado
+    codigo: primeiro.dataset.codigo,
+    descricao: primeiro.dataset.descricao,
+  });
+}
+
+function abrirSinalizarOP(ctx) {
+  if (!_opAtual || !ctx?.codigo) { toast('Nada pra sinalizar — abra a lista de insumos primeiro.', 'warn'); return; }
+  _sinalizarCtx = ctx;
   fecharModal('modal-op');
   fecharModal('modal-insumos-confirm');
   fecharModal('modal-baixa-pa-op');
   document.getElementById('sin-op-num').textContent = _opAtual.op;
-  document.getElementById('sin-codigo').textContent  = _opAtual.codigo;
+  document.getElementById('sin-codigo').textContent  = ctx.codigo + (ctx.isPA ? '' : ' (insumo — valida a OP)');
   document.getElementById('sin-qtde').textContent    = _opAtual.qtde;
   document.getElementById('sin-motivo').value        = '';
   document.getElementById('sin-msg').className       = 'msg';
@@ -2218,6 +2237,7 @@ function abrirSinalizarOP() {
 
 async function confirmarSinalizarOP() {
   if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
+  if (!_sinalizarCtx) return;
   const motivo = document.getElementById('sin-motivo').value.trim();
   const msg    = document.getElementById('sin-msg');
   if (!motivo) { mostrarMsg(msg, 'Informe o motivo.', 'err'); return; }
@@ -2227,8 +2247,8 @@ async function confirmarSinalizarOP() {
   setBtn('btn-confirmar-sinalizar', true, '<span class="spinner"></span> Gravando...');
   try {
     const res = await api('baixarOPSemEstoque', {
-      op: _opAtual.op, codigo: _opAtual.codigo, isPA: !!_opAtual.isPA,
-      descricao: _opAtual.descricao, obs: motivo, chaveIdem,
+      op: _opAtual.op, codigo: _sinalizarCtx.codigo, isPA: !!_sinalizarCtx.isPA,
+      descricao: _sinalizarCtx.descricao || '', obs: motivo, chaveIdem,
       usuario: USUARIO.nome || USUARIO.usuario,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
