@@ -841,9 +841,12 @@
       </div>
       <div id="bpa-msg" class="msg"></div>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer" style="flex-wrap:wrap">
       <button class="btn btn-secondary" onclick="fecharModal('modal-baixa-pa-op')">Cancelar</button>
       <button class="btn btn-pa btn-full" id="btn-confirmar-bpa" onclick="confirmarBaixaPAOp()">🏭 Confirmar Baixa PA</button>
+      <button style="width:100%;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOP()">
+        ✍️ Sinalizar OP sem retirar estoque
+      </button>
     </div>
   </div>
 </div>
@@ -914,6 +917,9 @@
           ✔ Confirmar e Gravar
         </button>
       </div>
+      <button id="btn-sinalizar-bom" style="display:none;width:100%;margin-top:8px;background:transparent;color:#b8860b;border:1px solid #e8d8a8;border-radius:var(--radius-sm);padding:8px;font-size:12px;font-weight:600;cursor:pointer" onclick="abrirSinalizarOP()">
+        ✍️ Sinalizar OP sem retirar estoque
+      </button>
     </div>
   </div>
 </div>
@@ -2076,6 +2082,7 @@ async function abrirModalBOM() {
   document.getElementById('ins-selecionados-count').textContent = '';
   document.getElementById('ins-chk-all').checked = true;
   setBtn('btn-gravar-insumos', false, '✔ Confirmar Baixa BOM');
+  document.getElementById('btn-sinalizar-bom').style.display = 'block';
 
   // Contexto especial para BOM
   _contextoInsumos = { tipo: 'bom', op: op.op, usuario: USUARIO.nome || USUARIO.usuario, chaveIdem: _gerarChave() };
@@ -2197,6 +2204,9 @@ async function confirmarBaixaPAOp() {
 // ══════════════════════════════════════════════════════
 function abrirSinalizarOP() {
   if (!_opAtual) return;
+  fecharModal('modal-op');
+  fecharModal('modal-insumos-confirm');
+  fecharModal('modal-baixa-pa-op');
   document.getElementById('sin-op-num').textContent = _opAtual.op;
   document.getElementById('sin-codigo').textContent  = _opAtual.codigo;
   document.getElementById('sin-qtde').textContent    = _opAtual.qtde;
@@ -2213,10 +2223,12 @@ async function confirmarSinalizarOP() {
   if (!motivo) { mostrarMsg(msg, 'Informe o motivo.', 'err'); return; }
 
   _requisicaoEmAndamento = true;
+  const chaveIdem = _gerarChave();
   setBtn('btn-confirmar-sinalizar', true, '<span class="spinner"></span> Gravando...');
   try {
     const res = await api('baixarOPSemEstoque', {
-      op: _opAtual.op, obs: motivo,
+      op: _opAtual.op, codigo: _opAtual.codigo, isPA: !!_opAtual.isPA,
+      descricao: _opAtual.descricao, obs: motivo, chaveIdem,
       usuario: USUARIO.nome || USUARIO.usuario,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
@@ -2390,6 +2402,7 @@ async function abrirModalInsumosConfirm(titulo, qtde, codigoPA, op) {
     '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:13px"><span class="spinner" style="border-top-color:var(--accent)"></span> Carregando insumos...</div>';
   document.getElementById('ins-confirm-msg').className = 'msg';
   setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar');
+  document.getElementById('btn-sinalizar-bom').style.display = 'none'; // só aparece via abrirModalBOM (tipo:'bom')
   abrirModal('modal-insumos-confirm');
 
   try {

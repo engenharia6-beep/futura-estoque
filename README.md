@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @66 | Frontend: `fa130d5`+**
+**GAS ativo: @67 | Frontend: `fa130d5`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -48,20 +48,35 @@ deploys no fim deste arquivo.
 
 ### ✅ Funcionando
 
-**✍️ Sinalizar OP sem retirar estoque (2026-10-06, deploy @66)**
+**✍️ Sinalizar OP sem retirar estoque (2026-10-06, deploy @66/@67)**
 - Pedido: OPs onde o material já está em processo por fora do fluxo normal
   (ex: alocado manualmente) precisam "passar pelo estoque" na sinalização
   do sistema, mas sem gerar nenhuma saída real de Insumo/PA — as 3 opções
   existentes (BOM, PA Direto, Triangular) sempre geram movimento de verdade
-- Mecanismo: a OP tem 3 colunas relacionadas a status em `OPS` —
+- **Revisão importante (@67)**: a 1ª versão (@66) só marcava a coluna
+  `STATUS` de OPS, sem gravar nada em Movimento/Movimento_PA. Usuário
+  testou e explicou que o fluxo externo dele (integração com OMIE) **lê
+  Movimento/Movimento_PA diretamente** pra saber que uma OP foi processada
+  — só marcar STATUS não era suficiente. Fix: `baixarOPSemEstoque` agora
+  grava um movimento de **quantidade zero** em Movimento (Insumo) ou
+  Movimento_PA (PA), além de marcar STATUS. Quantidade zero = aparece no
+  histórico pro fluxo externo ler, mas não muda nenhum saldo
+- Não reusa `gravarMovimento`/`gravarMovimentoPA`: `gravarMovimentoPA`
+  bloqueia `qtde<=0` explicitamente ("Quantidade inválida"), e não fazia
+  sentido afrouxar essa validação na função usada por todo pagamento real
+  só por causa deste caso raro. Grava a linha direto, mesmo padrão que
+  `transferirCodigo`/`pagarOPTriangularPA` já usam
+- Mecanismo do STATUS: a OP tem 3 colunas relacionadas a status em `OPS` —
   `POSICAO` (usada pros filtros ESTOQUE/PAGO/EM BAIXA), `PAGO` (**fórmula**
   que confere se existe Movimento batendo com a OP — não pode ser
-  sobrescrita) e `STATUS` (nunca usada pelo app antes, livre)
-- Novo 4º card no modal "Como pagar?" → **"Sem retirar estoque"**. Pede um
-  motivo obrigatório (vira parte da `OBS` da OP, com timestamp+usuário, pra
-  manter rastro). Backend (`baixarOPSemEstoque`) escreve só em `STATUS`
-  (`SINALIZADA_SEM_ESTOQUE`) — não cria Movimento, não toca `PAGO` nem
-  `POSICAO`, não muda saldo de nada
+  sobrescrita) e `STATUS` (nunca usada pelo app antes, livre). Escreve só
+  em `STATUS` (`SINALIZADA_SEM_ESTOQUE`) — não toca `PAGO` nem `POSICAO`
+- Botão **"✍️ Sinalizar OP sem retirar estoque"** acessível em 3 lugares:
+  card no modal "Como pagar?", dentro da tela "Via BOM (Insumos)", e dentro
+  da tela "Baixa PA Direto" — o usuário testou e pediu especificamente os
+  2 últimos, porque às vezes só percebe que não há saldo real pra tirar
+  depois de já ter entrado numa dessas telas (ex: "Saldo atual: 0"). Pede
+  motivo obrigatório, vira a `OBS` do movimento zero gravado
 - `listarOPS` ganhou um 4º estado, `SINALIZADA`, com prioridade sobre
   `PAGO`/`EM_BAIXA`/`ABERTA`. No app aparece com rótulo e cor **diferentes**
   de "✓ Pago" (badge âmbar "✍️ Sinalizada") — nunca se confunde visualmente
@@ -695,4 +710,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @63 | `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) |
 | @64 | `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — ao tentar instalar, erro "Specified permissions are not sufficient... script.scriptapp" (escopo faltando no manifesto) |
 | @65 | fix: adiciona `https://www.googleapis.com/auth/script.scriptapp` em `appsscript.json` (necessário pra `ScriptApp.newTrigger`/`getProjectTriggers`/`deleteTrigger`) — precisa reautorizar ao rodar `_instalarGatilhoDiarioResumo()` de novo, escopo novo sempre pede consentimento |
-| @66 | ✅ **ATIVO** — feat: `baixarOPSemEstoque` — sinaliza OP como resolvida sem gerar Movimento, escrevendo só na coluna `STATUS` (livre) de OPS; `listarOPS` ganha estado `SINALIZADA` — ver "Estado atual" |
+| @66 | feat: `baixarOPSemEstoque` v1 — sinaliza OP como resolvida escrevendo só na coluna `STATUS` (livre) de OPS, sem gerar Movimento; `listarOPS` ganha estado `SINALIZADA` |
+| @67 | ✅ **ATIVO** — fix: `baixarOPSemEstoque` passa a gravar movimento de quantidade ZERO em Movimento/Movimento_PA também (fluxo externo do usuário lê essas abas) — ver "Estado atual" |

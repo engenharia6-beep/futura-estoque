@@ -2012,45 +2012,78 @@ function listarOPS() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  baixarOPSemEstoque — sinaliza a OP como resolvida SEM gerar nenhum
-//  Movimento/Movimento_PA e SEM tocar em saldo de Insumo/PA. Usado quando o
-//  material da OP já está em processo por fora do fluxo normal, mas a OP
-//  ainda precisa "passar pelo estoque" na sinalização do sistema.
-//  Escreve só na coluna STATUS (livre, nunca usada antes) — não toca em
-//  PAGO (fórmula, quebraria se sobrescrita) nem em POSICAO (usada por
-//  outros filtros de listagem).
+//  baixarOPSemEstoque — sinaliza a OP como resolvida gravando um movimento
+//  de QUANTIDADE ZERO em Movimento/Movimento_PA (não muda saldo de nada) +
+//  marca a coluna STATUS da OP (livre, nunca usada antes) pra exibir
+//  diferente de um pagamento real no app. O movimento zero existe porque o
+//  fluxo externo do usuário lê Movimento/Movimento_PA pra saber que a OP
+//  foi processada — só marcar STATUS não bastava.
+//  Não reusa gravarMovimento/gravarMovimentoPA: gravarMovimentoPA bloqueia
+//  qtde<=0 explicitamente ("Quantidade inválida"), e não é desejável afrouxar
+//  essa validação na função usada por todo pagamento real só por causa deste
+//  caso raro. Em vez disso, grava a linha direto — mesmo padrão que
+//  transferirCodigo/pagarOPTriangularPA já usam.
 // ════════════════════════════════════════════════════════════════════════════
 function baixarOPSemEstoque(dados) {
   try {
-    const op      = String(dados.op || '').trim();
-    const motivo  = String(dados.obs || dados.motivo || '').trim();
-    const usuario = String(dados.usuario || '').trim();
-    if (!op) return { ok: false, mensagem: 'OP não informada.' };
+    const op        = String(dados.op || '').trim();
+    const codigo    = String(dados.codigo || '').trim();
+    const isPA      = !!dados.isPA;
+    const motivo    = String(dados.obs || dados.motivo || '').trim();
+    const usuario   = String(dados.usuario || '').trim();
+    const chaveIdem = String(dados.chaveIdem || '').trim();
+    if (!op)     return { ok: false, mensagem: 'OP não informada.' };
+    if (!codigo) return { ok: false, mensagem: 'Código não informado.' };
     if (!motivo) return { ok: false, mensagem: 'Informe o motivo da baixa sem estoque.' };
 
-    const sh = _sh(NOME_ABA_OPS);
-    if (!sh) return { ok: false, mensagem: 'Aba OPS não encontrada.' };
-    const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    const idx = {};
-    header.forEach((v, i) => { idx[String(v||'').trim().toUpperCase()] = i; });
-    const iOP     = idx['OP'] ?? idx['N_OP'] ?? -1;
-    const iStatus = idx['STATUS'] ?? -1;
-    const iObs    = idx['OBS'] ?? idx['OBSERVACAO'] ?? -1;
-    if (iOP < 0 || iStatus < 0) return { ok: false, mensagem: 'Colunas OP/STATUS não encontradas em OPS.' };
+    const nomeCadastro = isPA ? NOME_ABA_CADASTRO_PA : NOME_ABA_CADASTRO;
+    const nomeMov       = isPA ? NOME_ABA_MOVIMENTO_PA : NOME_ABA_MOVIMENTO;
+    const infoCad = _mapaCadastroInfo(nomeCadastro);
+    const item = infoCad[codigo];
+    if (item === undefined) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
+    if (item.situacao === 'INATIVO') return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
 
-    const lastRow = sh.getLastRow();
-    if (lastRow < 2) return { ok: false, mensagem: `OP '${op}' não encontrada.` };
-    const colOP = sh.getRange(2, iOP + 1, lastRow - 1, 1).getValues();
-    const idxLinha = colOP.findIndex(r => String(r[0]||'').trim() === op);
-    if (idxLinha < 0) return { ok: false, mensagem: `OP '${op}' não encontrada em OPS.` };
-    const linha = idxLinha + 2;
+    const sh = _sh(nomeMov);
+    if (!sh) return { ok: false, mensagem: `Aba ${nomeMov} não encontrada.` };
+    const dadosSh      = sh.getDataRange().getValues();
+    const header       = dadosSh[0];
+    const linhasAntes  = dadosSh.length;
 
-    sh.getRange(linha, iStatus + 1).setValue('SINALIZADA_SEM_ESTOQUE');
-    if (iObs >= 0) {
-      const obsAtual = String(sh.getRange(linha, iObs + 1).getValue() || '').trim();
-      const agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
-      const novaObs = `[Sem estoque — ${agora}${usuario ? ' — ' + usuario : ''}] ${motivo}`;
-      sh.getRange(linha, iObs + 1).setValue(obsAtual ? obsAtual + ' | ' + novaObs : novaObs);
+    if (chaveIdem) {
+      const iChave = header.findIndex(v => _norm(v) === 'chave');
+      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
+        return { ok: true, jaGravado: true };
+    }
+
+    const id = Utilities.getUuid().substring(0,8);
+    sh.appendRow(_montarLinhaMovimento(header, {
+      id, data: new Date(), tipo: 'SAIDA', op, codigo,
+      descricao: dados.descricao || item.descricao || '',
+      qtde: 0, endereco: item.endereco || '',
+      obs: `[Sinalização sem retirada de estoque] ${motivo}`,
+      usuario, chave: chaveIdem,
+    }));
+    const verif = _verificarGravacao(sh, [id], linhasAntes);
+    if (!verif.ok) return { ok: false, mensagem: 'Movimento não confirmado. ' + (verif.erro||'') };
+    if (isPA) _sincronizarResumoPA(codigo); else _sincronizarResumoInsumo(codigo);
+
+    // Marca STATUS na OP pra exibir diferente de um pagamento real no app
+    // (não toca PAGO — fórmula — nem POSICAO — usada por outros filtros)
+    const shOPS = _sh(NOME_ABA_OPS);
+    if (shOPS) {
+      const headerOPS = shOPS.getRange(1, 1, 1, shOPS.getLastColumn()).getValues()[0];
+      const idxOPS = {};
+      headerOPS.forEach((v, i) => { idxOPS[String(v||'').trim().toUpperCase()] = i; });
+      const iOP     = idxOPS['OP'] ?? idxOPS['N_OP'] ?? -1;
+      const iStatus = idxOPS['STATUS'] ?? -1;
+      if (iOP >= 0 && iStatus >= 0) {
+        const lastRowOPS = shOPS.getLastRow();
+        if (lastRowOPS >= 2) {
+          const colOP = shOPS.getRange(2, iOP + 1, lastRowOPS - 1, 1).getValues();
+          const idxLinha = colOP.findIndex(r => String(r[0]||'').trim() === op);
+          if (idxLinha >= 0) shOPS.getRange(idxLinha + 2, iStatus + 1).setValue('SINALIZADA_SEM_ESTOQUE');
+        }
+      }
     }
     return { ok: true };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
