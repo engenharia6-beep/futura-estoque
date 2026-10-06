@@ -371,6 +371,7 @@ function doPost(e) {
 
       // ── Triangular (nova versão com baixa de insumos) ─────────────────────
       'pagarTriangular':        () => pagarOPTriangularPA(dados),
+      'baixarOPSemEstoque':     () => baixarOPSemEstoque(dados),
 
       // ── Mudança de endereço ───────────────────────────────────────────────
       'mudarEndereco':          () => mudarEndereco(dados),
@@ -1964,6 +1965,9 @@ function listarOPS() {
                                                // que já verifica na planilha se a OP tem
                                                // movimento — substitui escanear Movimento/
                                                // Movimento_PA inteiros aqui no código
+    const iStatus  = idx['STATUS']     ?? -1; // coluna livre (nunca usada antes) — usada por
+                                               // baixarOPSemEstoque() pra sinalizar a OP sem
+                                               // gerar movimento nenhum (ver essa função)
     const iCliente = idx['CLIENTE']    ?? -1; // coluna P — quem fez o pedido, pra equipe
                                                // de estoque saber a quem entregar
 
@@ -1979,9 +1983,11 @@ function listarOPS() {
         const isPA   = origem === 'PA';
         const posicaoPlanilha = get(r, iPosicao).toUpperCase();
 
-        // Estado: PAGO se a coluna PAGO (fórmula) diz, EM_BAIXA se planilha diz, senão ABERTA
+        // Estado: SINALIZADA (baixa manual sem estoque) tem prioridade, depois
+        // PAGO (fórmula), depois EM_BAIXA (planilha), senão ABERTA
         let estado;
-        if (get(r, iPago).toUpperCase() === 'PAGO') estado = 'PAGO';
+        if (get(r, iStatus).toUpperCase() === 'SINALIZADA_SEM_ESTOQUE') estado = 'SINALIZADA';
+        else if (get(r, iPago).toUpperCase() === 'PAGO') estado = 'PAGO';
         else if (posicaoPlanilha === 'EM BAIXA')    estado = 'EM_BAIXA';
         else                                         estado = 'ABERTA';
 
@@ -1993,7 +1999,7 @@ function listarOPS() {
           qtde:     Number(r[iQtde < 0 ? 0 : iQtde]||0),
           origem,                          // 'INSUMO' | 'PA'
           isPA,
-          estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA'
+          estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA' | 'SINALIZADA'
           cliente:  get(r, iCliente),
           obs:      get(r, iObs),
           zpl:      get(r, iZPL),
@@ -2002,6 +2008,51 @@ function listarOPS() {
           fotoUrl:  get(r, iFoto),
         };
       });
+  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  baixarOPSemEstoque — sinaliza a OP como resolvida SEM gerar nenhum
+//  Movimento/Movimento_PA e SEM tocar em saldo de Insumo/PA. Usado quando o
+//  material da OP já está em processo por fora do fluxo normal, mas a OP
+//  ainda precisa "passar pelo estoque" na sinalização do sistema.
+//  Escreve só na coluna STATUS (livre, nunca usada antes) — não toca em
+//  PAGO (fórmula, quebraria se sobrescrita) nem em POSICAO (usada por
+//  outros filtros de listagem).
+// ════════════════════════════════════════════════════════════════════════════
+function baixarOPSemEstoque(dados) {
+  try {
+    const op      = String(dados.op || '').trim();
+    const motivo  = String(dados.obs || dados.motivo || '').trim();
+    const usuario = String(dados.usuario || '').trim();
+    if (!op) return { ok: false, mensagem: 'OP não informada.' };
+    if (!motivo) return { ok: false, mensagem: 'Informe o motivo da baixa sem estoque.' };
+
+    const sh = _sh(NOME_ABA_OPS);
+    if (!sh) return { ok: false, mensagem: 'Aba OPS não encontrada.' };
+    const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    const idx = {};
+    header.forEach((v, i) => { idx[String(v||'').trim().toUpperCase()] = i; });
+    const iOP     = idx['OP'] ?? idx['N_OP'] ?? -1;
+    const iStatus = idx['STATUS'] ?? -1;
+    const iObs    = idx['OBS'] ?? idx['OBSERVACAO'] ?? -1;
+    if (iOP < 0 || iStatus < 0) return { ok: false, mensagem: 'Colunas OP/STATUS não encontradas em OPS.' };
+
+    const lastRow = sh.getLastRow();
+    if (lastRow < 2) return { ok: false, mensagem: `OP '${op}' não encontrada.` };
+    const colOP = sh.getRange(2, iOP + 1, lastRow - 1, 1).getValues();
+    const idxLinha = colOP.findIndex(r => String(r[0]||'').trim() === op);
+    if (idxLinha < 0) return { ok: false, mensagem: `OP '${op}' não encontrada em OPS.` };
+    const linha = idxLinha + 2;
+
+    sh.getRange(linha, iStatus + 1).setValue('SINALIZADA_SEM_ESTOQUE');
+    if (iObs >= 0) {
+      const obsAtual = String(sh.getRange(linha, iObs + 1).getValue() || '').trim();
+      const agora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+      const novaObs = `[Sem estoque — ${agora}${usuario ? ' — ' + usuario : ''}] ${motivo}`;
+      sh.getRange(linha, iObs + 1).setValue(obsAtual ? obsAtual + ' | ' + novaObs : novaObs);
+    }
+    return { ok: true };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 

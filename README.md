@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @65 | Frontend: `af93151`+**
+**GAS ativo: @66 | Frontend: `af93151`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -47,6 +47,26 @@ deploys no fim deste arquivo.
 ## Estado atual — 2026-09-29
 
 ### ✅ Funcionando
+
+**✍️ Sinalizar OP sem retirar estoque (2026-10-06, deploy @66)**
+- Pedido: OPs onde o material já está em processo por fora do fluxo normal
+  (ex: alocado manualmente) precisam "passar pelo estoque" na sinalização
+  do sistema, mas sem gerar nenhuma saída real de Insumo/PA — as 3 opções
+  existentes (BOM, PA Direto, Triangular) sempre geram movimento de verdade
+- Mecanismo: a OP tem 3 colunas relacionadas a status em `OPS` —
+  `POSICAO` (usada pros filtros ESTOQUE/PAGO/EM BAIXA), `PAGO` (**fórmula**
+  que confere se existe Movimento batendo com a OP — não pode ser
+  sobrescrita) e `STATUS` (nunca usada pelo app antes, livre)
+- Novo 4º card no modal "Como pagar?" → **"Sem retirar estoque"**. Pede um
+  motivo obrigatório (vira parte da `OBS` da OP, com timestamp+usuário, pra
+  manter rastro). Backend (`baixarOPSemEstoque`) escreve só em `STATUS`
+  (`SINALIZADA_SEM_ESTOQUE`) — não cria Movimento, não toca `PAGO` nem
+  `POSICAO`, não muda saldo de nada
+- `listarOPS` ganhou um 4º estado, `SINALIZADA`, com prioridade sobre
+  `PAGO`/`EM_BAIXA`/`ABERTA`. No app aparece com rótulo e cor **diferentes**
+  de "✓ Pago" (badge âmbar "✍️ Sinalizada") — nunca se confunde visualmente
+  com um pagamento que de fato tirou estoque; sai da contagem "X em aberto"
+  igual uma OP paga
 
 **🔄 onEdit — Cadastro_Resumo/Cadastro_PA_Resumo sincronizam sozinhas em edição manual (2026-10-01, deploy @63)**
 - Reportado: produto novo cadastrado direto na planilha não aparecia no
@@ -674,4 +694,5 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @62 | gatilho `onEdit` sincroniza Resumo em edição manual no Cadastro/Cadastro_PA (filtrado por coluna relevante); `_sincronizarResumoInsumo`/`PA` otimizadas (busca só a coluna CÓDIGO, não a aba inteira) |
 | @63 | `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) |
 | @64 | `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — ao tentar instalar, erro "Specified permissions are not sufficient... script.scriptapp" (escopo faltando no manifesto) |
-| @65 | ✅ **ATIVO** — fix: adiciona `https://www.googleapis.com/auth/script.scriptapp` em `appsscript.json` (necessário pra `ScriptApp.newTrigger`/`getProjectTriggers`/`deleteTrigger`) — precisa reautorizar ao rodar `_instalarGatilhoDiarioResumo()` de novo, escopo novo sempre pede consentimento — ver "Estado atual" |
+| @65 | fix: adiciona `https://www.googleapis.com/auth/script.scriptapp` em `appsscript.json` (necessário pra `ScriptApp.newTrigger`/`getProjectTriggers`/`deleteTrigger`) — precisa reautorizar ao rodar `_instalarGatilhoDiarioResumo()` de novo, escopo novo sempre pede consentimento |
+| @66 | ✅ **ATIVO** — feat: `baixarOPSemEstoque` — sinaliza OP como resolvida sem gerar Movimento, escrevendo só na coluna `STATUS` (livre) de OPS; `listarOPS` ganha estado `SINALIZADA` — ver "Estado atual" |

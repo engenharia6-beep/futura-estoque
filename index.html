@@ -311,6 +311,7 @@
     .op-row.impar{background:#ffffff}
     .op-row.pago{opacity:.5}
     .op-row.baixa{background:#e8f5f0}
+    .op-row.sinalizada{background:#fdf3e0}
     /* Foto */
     .op-row-foto{width:100px;min-width:100px;background:#f8fafa;display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden;flex-shrink:0;border-right:1px solid #c8d8da;padding:4px}
     .op-row-foto img{width:100%;height:100%;object-fit:contain}
@@ -348,6 +349,7 @@
     .btn-pagar-op.aberta{background:#16a34a;color:#fff}
     .btn-pagar-op.baixa{background:#1a5c5a;color:#fff}
     .btn-pagar-op.pago{background:transparent;color:#9ababa;border:1px solid #c8d8da;pointer-events:none}
+    .btn-pagar-op.sinalizada{background:transparent;color:#b8860b;border:1px solid #e8d8a8;pointer-events:none}
     /* Refresh */
     .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 4px;font-size:11px;color:#4a6a6a}
     .refresh-progress{flex:1;height:3px;background:#d8e8ea;border-radius:2px;overflow:hidden}
@@ -774,7 +776,41 @@
           <div class="card-icon">🔄</div>
           <div class="card-label">Triangular</div>
         </div>
+        <div class="op-tipo-card" onclick="escolherTipoPagamento('sinalizar')" style="border-color:#e8d8a8">
+          <div class="card-icon">✍️</div>
+          <div class="card-label">Sem retirar estoque</div>
+        </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODAL: SINALIZAR OP SEM RETIRAR ESTOQUE
+══════════════════════════════════════════════════════ -->
+<div id="modal-sinalizar-op" class="modal-overlay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">✍️ Sinalizar — OP <span id="sin-op-num" style="color:var(--accent)"></span></span>
+      <button onclick="fecharModal('modal-sinalizar-op')" style="background:transparent;color:var(--text-muted);font-size:20px">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;font-size:13px;line-height:1.6">
+        <div><span style="color:var(--text-muted)">Produto: </span><strong id="sin-codigo"></strong></div>
+        <div><span style="color:var(--text-muted)">Quantidade: </span><strong id="sin-qtde"></strong></div>
+      </div>
+      <div class="insumos-aviso">
+        ⚠️ Isso marca a OP como resolvida <strong>sem gerar nenhum movimento</strong> — não tira nada de estoque de Insumo nem de PA. Use só quando o material já está em processo por fora do fluxo normal.
+      </div>
+      <div class="field"><label>Motivo (obrigatório)</label>
+        <input id="sin-motivo" type="text" placeholder="Ex: material já em processo, sem OP de retirada">
+      </div>
+      <div id="sin-msg" class="msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-sinalizar-op')">Cancelar</button>
+      <button class="btn btn-full" id="btn-confirmar-sinalizar" style="background:#b8860b;color:#fff" onclick="confirmarSinalizarOP()">✍️ Confirmar Sinalização</button>
     </div>
   </div>
 </div>
@@ -1890,12 +1926,12 @@ function renderOPS(ops) {
     ? ops.filter(o => _matchOPS(o, termoAtual.split(/\s+/).filter(Boolean)))
     : ops;
 
-  const abertas = filtradas.filter(o => o.estado !== 'PAGO');
-  const pagas   = filtradas.filter(o => o.estado === 'PAGO');
-  const todas   = [...abertas, ...pagas]; // abertas primeiro
+  const abertas   = filtradas.filter(o => o.estado !== 'PAGO' && o.estado !== 'SINALIZADA');
+  const resolvidas = filtradas.filter(o => o.estado === 'PAGO' || o.estado === 'SINALIZADA');
+  const todas   = [...abertas, ...resolvidas]; // abertas primeiro
 
   const countEl = document.getElementById('ops-count');
-  if (countEl) countEl.textContent = `${abertas.length} em aberto · ${pagas.length} pagas`;
+  if (countEl) countEl.textContent = `${abertas.length} em aberto · ${resolvidas.length} pagas`;
 
   if (!todas.length) {
     lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP encontrada.</div></div>';
@@ -1904,9 +1940,9 @@ function renderOPS(ops) {
 
   lista.innerHTML = todas.map((op, idx) => {
     const parImpar  = idx % 2 === 0 ? 'par' : 'impar';
-    const estadoClass = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : '';
-    const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
-    const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
+    const estadoClass = op.estado === 'PAGO' ? 'pago' : op.estado === 'SINALIZADA' ? 'sinalizada' : op.estado === 'EM_BAIXA' ? 'baixa' : '';
+    const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'SINALIZADA' ? 'sinalizada' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
+    const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'SINALIZADA' ? '✍️ Sinalizada' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
     const fotoHtml = op.fotoUrl
       ? `<img src="${esc(_normalizarFotoUrl(op.fotoUrl))}" style="width:100%;height:100%;object-fit:contain" alt="" onerror="this.style.display='none'">`
       : `<span style="font-size:32px">${op.isPA?'🏭':'📦'}</span>`;
@@ -1932,7 +1968,7 @@ function renderOPS(ops) {
         <div class="op-row-btns">
           <button class="btn-silk btn-silk-metal" data-acao="metal" data-zpl="${esc(op.zplMetal||'')}">🖨 Metal</button>
           <button class="btn-silk" data-acao="op" data-zpl="${esc(op.zpl||'')}">🖨 OP</button>
-          <button class="btn-pagar-op ${btnClass}" data-acao="${op.estado!=='PAGO'?'pagar':''}">${btnLabel}</button>
+          <button class="btn-pagar-op ${btnClass}" data-acao="${(op.estado!=='PAGO'&&op.estado!=='SINALIZADA')?'pagar':''}">${btnLabel}</button>
           <div class="op-row-btns-right">
             ${op.obs  ? `<span class="op-obs-label">📝 ${esc(op.obs)}</span>` : ''}
             ${op.silk ? `<span class="op-silk-label">SILK: ${esc(op.silk)}</span>` : ''}
@@ -2018,6 +2054,7 @@ async function escolherTipoPagamento(tipo) {
   if (tipo === 'bom')        { await abrirModalBOM(); return; }
   if (tipo === 'pa')         { abrirBaixaPAOp(); return; }
   if (tipo === 'triangular') { abrirTriangular(); return; }
+  if (tipo === 'sinalizar')  { abrirSinalizarOP(); return; }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2152,6 +2189,45 @@ async function confirmarBaixaPAOp() {
   } finally {
     _requisicaoEmAndamento = false;
     setBtn('btn-confirmar-bpa', false, '🏭 Confirmar Baixa PA');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  SINALIZAR OP SEM RETIRAR ESTOQUE
+// ══════════════════════════════════════════════════════
+function abrirSinalizarOP() {
+  if (!_opAtual) return;
+  document.getElementById('sin-op-num').textContent = _opAtual.op;
+  document.getElementById('sin-codigo').textContent  = _opAtual.codigo;
+  document.getElementById('sin-qtde').textContent    = _opAtual.qtde;
+  document.getElementById('sin-motivo').value        = '';
+  document.getElementById('sin-msg').className       = 'msg';
+  setBtn('btn-confirmar-sinalizar', false, '✍️ Confirmar Sinalização');
+  abrirModal('modal-sinalizar-op');
+}
+
+async function confirmarSinalizarOP() {
+  if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
+  const motivo = document.getElementById('sin-motivo').value.trim();
+  const msg    = document.getElementById('sin-msg');
+  if (!motivo) { mostrarMsg(msg, 'Informe o motivo.', 'err'); return; }
+
+  _requisicaoEmAndamento = true;
+  setBtn('btn-confirmar-sinalizar', true, '<span class="spinner"></span> Gravando...');
+  try {
+    const res = await api('baixarOPSemEstoque', {
+      op: _opAtual.op, obs: motivo,
+      usuario: USUARIO.nome || USUARIO.usuario,
+    });
+    if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    fecharModal('modal-sinalizar-op');
+    toast('✔ OP sinalizada sem retirar estoque!');
+    carregarOPS();
+  } catch(e) {
+    mostrarMsg(msg, e.message, 'err');
+  } finally {
+    _requisicaoEmAndamento = false;
+    setBtn('btn-confirmar-sinalizar', false, '✍️ Confirmar Sinalização');
   }
 }
 
