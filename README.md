@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @67 | Frontend: `2385ff9`+**
+**GAS ativo: @67 | Frontend: `536bc0b`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -71,12 +71,13 @@ deploys no fim deste arquivo.
   que confere se existe Movimento batendo com a OP — não pode ser
   sobrescrita) e `STATUS` (nunca usada pelo app antes, livre). Escreve só
   em `STATUS` (`SINALIZADA_SEM_ESTOQUE`) — não toca `PAGO` nem `POSICAO`
-- Botão **"✍️ Sinalizar OP sem retirar estoque"** acessível em 3 lugares:
-  card no modal "Como pagar?", dentro da tela "Via BOM (Insumos)", e dentro
-  da tela "Baixa PA Direto" — o usuário testou e pediu especificamente os
-  2 últimos, porque às vezes só percebe que não há saldo real pra tirar
-  depois de já ter entrado numa dessas telas (ex: "Saldo atual: 0"). Pede
-  motivo obrigatório, vira a `OBS` do movimento zero gravado
+- Botão **"✍️ Sinalizar OP sem retirar estoque"** — **só dentro da tela
+  "Baixa PA Direto"** (decisão final do usuário, commit `536bc0b`). Chegou
+  a existir em mais 2 lugares (card genérico + dentro da tela BOM), mas o
+  usuário pediu pra tirar: na tela BOM é "processo normal" mesmo, sem opção
+  de pular; o card genérico não tinha como escolher um código válido sem a
+  lista de insumos carregada. Pede motivo obrigatório, vira a `OBS` do
+  movimento zero gravado em `Movimento_PA`
 - `listarOPS` ganhou um 4º estado, `SINALIZADA`, com prioridade sobre
   `PAGO`/`EM_BAIXA`/`ABERTA`. No app aparece com rótulo e cor **diferentes**
   de "✓ Pago" (badge âmbar "✍️ Sinalizada") — nunca se confunde visualmente
