@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @67 | Frontend: `541e520`+**
+**GAS ativo: @67 | Frontend: `2385ff9`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -82,6 +82,16 @@ deploys no fim deste arquivo.
   de "✓ Pago" (badge âmbar "✍️ Sinalizada") — nunca se confunde visualmente
   com um pagamento que de fato tirou estoque; sai da contagem "X em aberto"
   igual uma OP paga
+- **Bug corrigido (commit `2385ff9`)**: a 1ª versão do botão usava
+  `_opAtual.isPA` (classificação de origem da OP) pra decidir Insumo vs PA
+  — mas uma OP origem=INSUMO pode ter o código cadastrado só em
+  `Cadastro_PA` (ex: `DM2P-728`), dando "Item não encontrado" nas duas
+  telas. Fix: cada tela passa um contexto explícito — "Baixa PA Direto" usa
+  o próprio código do produto (válido lá); "BOM" usa o 1º item da lista de
+  insumos já carregada (o código do produto não existe como insumo, não dá
+  pra usar ele). O card genérico "Sem retirar estoque" do modal "Como
+  pagar?" foi removido por não ter como escolher um código válido sem a
+  lista de insumos carregada
 
 **🔄 onEdit — Cadastro_Resumo/Cadastro_PA_Resumo sincronizam sozinhas em edição manual (2026-10-01, deploy @63)**
 - Reportado: produto novo cadastrado direto na planilha não aparecia no
