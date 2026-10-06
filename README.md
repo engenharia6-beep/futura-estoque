@@ -6,7 +6,7 @@ Backend: Google Apps Script | Frontend: GitHub Pages
 **URL:** `https://engenharia6-beep.github.io/futura-estoque/`
 **GAS Script ID:** `1z_ahZGWewRAuxHVbPLgwfqbhBegzhrQbrvsVgdsRB795LVoSrxrPO976`
 **Deployment ID:** `AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg`
-**GAS ativo: @68 | Frontend: `e76e7c4`+**
+**GAS ativo: @69 | Frontend: `e76e7c4`+**
 
 > O número de versão exibido no rodapé do app (`APP_VERSION` em `index.html`) é
 > o hash do **último commit do frontend antes dele** — não o commit que fez o
@@ -44,7 +44,7 @@ deploys no fim deste arquivo.
 
 ---
 
-## Estado atual — 2026-09-29
+## Estado atual — 2026-10-06
 
 ### ✅ Funcionando
 
@@ -103,17 +103,18 @@ deploys no fim deste arquivo.
   "sem linha conhecida" (usado pelas outras ~10 chamadas, ex: `gravarMovimento`)
   também passou a buscar só a coluna CÓDIGO em vez da aba inteira com fórmula
   — mesma técnica da Fase 1c, agora aplicada aqui também
-- **Limitação conhecida, agora coberta por rede de segurança diária
-  (deploy @64)**: `onEdit` não cobre exclusão de linha em nenhuma das 4
-  abas (apagar uma linha inteira não dá informação confiável sobre qual
-  código sumiu, já que o dado não existe mais quando o evento dispara).
-  Usuário confirmou que isso acontece, embora raro — então
+- **Limitação conhecida, coberta por rede de segurança diária (deploy
+  @64, ✅ ativa desde 2026-10-06)**: `onEdit` não cobre exclusão de linha
+  em nenhuma das 4 abas (apagar uma linha inteira não dá informação
+  confiável sobre qual código sumiu, já que o dado não existe mais quando
+  o evento dispara). Usuário confirmou que isso acontece, embora raro —
   `_repovoarResumoDiario()` roda via gatilho instalável 1x por dia (~3h,
   fuso do script) repopulando os dois Resumos por completo, cobrindo esse
-  caso dentro de até 24h. Instalado rodando `_instalarGatilhoDiarioResumo()`
-  uma vez pelo editor do Apps Script (gatilho por tempo não se autoinstala
-  só pelo nome da função, diferente do `onEdit`) — idempotente, seguro
-  rodar de novo se precisar recriar
+  caso dentro de até 24h. Usuário confirmou que já rodou
+  `_instalarGatilhoDiarioResumo()` e autorizou — gatilho instalado e
+  funcionando. **Não precisa rodar de novo** a menos que o gatilho seja
+  removido manualmente na planilha (Apps Script → Gatilhos); a função é
+  idempotente se precisar recriar
 - Gatilho simples roda só com edição feita por humano na UI — edição
   programática via script (ex: `mudarEndereco` escrevendo o endereço) não
   dispara o `onEdit`, então não há dupla-sincronização
@@ -595,21 +596,16 @@ código.
 
 ### 📋 Assuntos em aberto
 
-- **Fase 1 (abas resumo) — cobertura de sincronização, o que falta**
-  (atualizado 2026-10-01, deploy @64) — a Fase 1b fechou
-  `gravarMovimentosEmLote`/`PA`, `gravarBaixaInsumos`, `pagarOPTriangularPA`,
-  `transferirCodigo`/`PA` e `mudarEndereco`/`PA`; o `onEdit` (deploy @62/@63)
-  fechou edição manual direto no Cadastro/Cadastro_PA e em Movimento/
-  Movimento_PA (cadastrar item novo, corrigir campo, adicionar/editar linha
-  de movimento). `salvarItemCadastro`/`salvarItemCadastroPA` continuam sem
-  sincronizar, mas são 2 das 9 rotas sem chamador no frontend (ver abaixo) —
-  não é usado na prática hoje. Único gap real que sobra: **exclusão de
-  linha** direto na planilha, em qualquer uma das 4 abas (nem `onEdit` cobre
-  isso de forma confiável). Mitigação: `_repovoarResumoDiario` (deploy @64,
-  fix de escopo no @65) — **ainda pendente de ativação**: precisa rodar
-  `_instalarGatilhoDiarioResumo()` uma vez pelo editor do Apps Script pra
-  instalar o gatilho diário (1ª tentativa falhou por escopo faltando,
-  corrigido no @65 — precisa rodar de novo e reautorizar).
+- ~~**Fase 1 (abas resumo) — cobertura de sincronização**~~ — **fechado**
+  (2026-10-06). A Fase 1b fechou `gravarMovimentosEmLote`/`PA`,
+  `gravarBaixaInsumos`, `pagarOPTriangularPA`, `transferirCodigo`/`PA` e
+  `mudarEndereco`/`PA`; o `onEdit` (deploy @62/@63) fechou edição manual
+  direto no Cadastro/Cadastro_PA e em Movimento/Movimento_PA; o gatilho
+  diário `_repovoarResumoDiario` (deploy @64, fix de escopo @65) cobre o
+  último gap (exclusão de linha) — confirmado instalado e ativo. Único
+  caminho que ainda não sincroniza é `salvarItemCadastro`/`salvarItemCadastroPA`,
+  mas são 2 das 9 rotas sem chamador no frontend (ver abaixo) — não usado
+  na prática.
 - **9 rotas do backend sem nenhum chamador no frontend** (achado 2026-09-29)
   — `alterarSenha`, `salvarCadastro`, `salvarCadastroPA`,
   `obterFormulasInsumo`, `obterFormulasPA`, `obterSaldo`, `obterSaldoPA`,
@@ -623,6 +619,22 @@ código.
   login, que não toca `Cadastro`/`Cadastro_PA`). Precisa investigar
   separado — ver conversa/plano da Fase 2 (retry automático em timeout no
   frontend + medir de novo depois da Fase 1).
+- **Discussão em aberto: migrar o "banco interno" pra um banco de dados de
+  verdade** (2026-10-01, não decidido) — contexto: a fonte de dados real é
+  o OMIE, mas sem conexão direta ao banco deles; a "carga" (import
+  periódico) alimenta OPS/vendas, e o dia a dia da equipe roda 100% em cima
+  do banco interno (Cadastro/Insumos/PA/Movimento, hoje em Sheets).
+  Cogitado Firestore (mesmo ecossistema Google, free tier) ou Supabase
+  (Postgres); recomendação dada: banco como única fonte de verdade,
+  planilha (se mantida) só como export de leitura, nunca bidirecional —
+  sincronizar nos dois sentidos recria os mesmos problemas que a Fase
+  1/1b/1c passaram a sessão inteira resolvendo. **Achado relevante pra essa
+  decisão**: a aba `Cadastro` tem 15.561 linhas cadastradas mas só ~1.360
+  com código preenchido — mais de 14 mil linhas "fantasma" que pesam em
+  toda leitura/fórmula da aba. Vale confirmar se são realmente vazias e
+  limpar, independente da decisão de migrar — pode ser um ganho de
+  performance grande e barato por si só. Nada disso foi implementado ainda;
+  fica como decisão de arquitetura em aberto.
 - **`ESTOQUE_ATUAL` do PA pode ficar dessincronizado do `Movimento_PA`
   (visto em 2026-08-12)** — a fórmula de `ESTOQUE_ATUAL` em `Cadastro_PA`
   não deriva só do `Movimento_PA`; qualquer correção de saldo feita fora
@@ -702,11 +714,12 @@ Fonte: `clasp versions` (descrições exatamente como cadastradas no deploy).
 | @58 | limpeza — remove `_diagCampoInsumo`, volta ao estado funcional do @56 |
 | @59 | Fase 1b (perf): `_mapaCadastroInfo`, `obterSaldo(PA)`, `obterEnderecosSaldo(PA)` passam a ler do Resumo em vez do Cadastro original; sincronização do resumo fechada em `gravarMovimentosEmLote(PA)`, `transferirCodigo(PA)`, `pagarOPTriangularPA`, `gravarBaixaInsumos`, `mudarEndereco(PA)` — ver "Estado atual" |
 | @60 | Fase 1c (perf): `mudarEndereco`/`mudarEnderecoPA` passam a ler só a coluna CÓDIGO em vez da aba inteira pra achar a linha — ver "Estado atual" |
-| @61 | diagnóstico temporário (`_diagListarAbas`) — levanta todas as abas da planilha p/ plano de migração de banco. Ainda ativo (não é destrutivo, só leitura) |
+| @61 | diagnóstico temporário (`_diagListarAbas`) — levanta todas as abas da planilha p/ plano de migração de banco. Removido no @69 |
 | @62 | gatilho `onEdit` sincroniza Resumo em edição manual no Cadastro/Cadastro_PA (filtrado por coluna relevante); `_sincronizarResumoInsumo`/`PA` otimizadas (busca só a coluna CÓDIGO, não a aba inteira) |
 | @63 | `onEdit` passa a vigiar também Movimento/Movimento_PA (correção de quantidade feita direto no histórico de movimento, não no Cadastro) |
 | @64 | `_repovoarResumoDiario`/`_instalarGatilhoDiarioResumo`: rede de segurança diária pro gap de exclusão de linha que o onEdit não cobre — ao tentar instalar, erro "Specified permissions are not sufficient... script.scriptapp" (escopo faltando no manifesto) |
 | @65 | fix: adiciona `https://www.googleapis.com/auth/script.scriptapp` em `appsscript.json` (necessário pra `ScriptApp.newTrigger`/`getProjectTriggers`/`deleteTrigger`) — precisa reautorizar ao rodar `_instalarGatilhoDiarioResumo()` de novo, escopo novo sempre pede consentimento |
 | @66 | feat: `baixarOPSemEstoque` v1 — sinaliza OP como resolvida escrevendo só na coluna `STATUS` (livre) de OPS, sem gerar Movimento; `listarOPS` ganha estado `SINALIZADA` |
 | @67 | fix: `baixarOPSemEstoque` passa a gravar movimento de quantidade ZERO em Movimento/Movimento_PA também (fluxo externo do usuário lê essas abas) |
-| @68 | ✅ **ATIVO** — simplif: remove `baixarOPSemEstoque`; "Sinalizar sem retirar estoque" passa a reusar `gravarMovimentoPA` direto (novo parâmetro `permitirZero`); remove marcação em `OPS.STATUS` — a fórmula `PAGO` já reconhece o movimento zero sozinha; `listarOPS` volta aos 3 estados originais — ver "Estado atual" |
+| @68 | simplif: remove `baixarOPSemEstoque`; "Sinalizar sem retirar estoque" passa a reusar `gravarMovimentoPA` direto (novo parâmetro `permitirZero`); remove marcação em `OPS.STATUS` — a fórmula `PAGO` já reconhece o movimento zero sozinha; `listarOPS` volta aos 3 estados originais |
+| @69 | ✅ **ATIVO** — limpeza: remove diagnóstico temporário `_diagListarAbas` (já tinha cumprido o papel — levantamento de abas pro plano de migração) |
