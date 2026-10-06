@@ -311,7 +311,6 @@
     .op-row.impar{background:#ffffff}
     .op-row.pago{opacity:.5}
     .op-row.baixa{background:#e8f5f0}
-    .op-row.sinalizada{background:#fdf3e0}
     /* Foto */
     .op-row-foto{width:100px;min-width:100px;background:#f8fafa;display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden;flex-shrink:0;border-right:1px solid #c8d8da;padding:4px}
     .op-row-foto img{width:100%;height:100%;object-fit:contain}
@@ -349,7 +348,6 @@
     .btn-pagar-op.aberta{background:#16a34a;color:#fff}
     .btn-pagar-op.baixa{background:#1a5c5a;color:#fff}
     .btn-pagar-op.pago{background:transparent;color:#9ababa;border:1px solid #c8d8da;pointer-events:none}
-    .btn-pagar-op.sinalizada{background:transparent;color:#b8860b;border:1px solid #e8d8a8;pointer-events:none}
     /* Refresh */
     .refresh-bar{display:flex;align-items:center;gap:10px;padding:6px 16px 4px;font-size:11px;color:#4a6a6a}
     .refresh-progress{flex:1;height:3px;background:#d8e8ea;border-radius:2px;overflow:hidden}
@@ -1928,12 +1926,12 @@ function renderOPS(ops) {
     ? ops.filter(o => _matchOPS(o, termoAtual.split(/\s+/).filter(Boolean)))
     : ops;
 
-  const abertas   = filtradas.filter(o => o.estado !== 'PAGO' && o.estado !== 'SINALIZADA');
-  const resolvidas = filtradas.filter(o => o.estado === 'PAGO' || o.estado === 'SINALIZADA');
-  const todas   = [...abertas, ...resolvidas]; // abertas primeiro
+  const abertas = filtradas.filter(o => o.estado !== 'PAGO');
+  const pagas   = filtradas.filter(o => o.estado === 'PAGO');
+  const todas   = [...abertas, ...pagas]; // abertas primeiro
 
   const countEl = document.getElementById('ops-count');
-  if (countEl) countEl.textContent = `${abertas.length} em aberto · ${resolvidas.length} pagas`;
+  if (countEl) countEl.textContent = `${abertas.length} em aberto · ${pagas.length} pagas`;
 
   if (!todas.length) {
     lista.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✅</div><div class="empty-state-text">Nenhuma OP encontrada.</div></div>';
@@ -1942,9 +1940,9 @@ function renderOPS(ops) {
 
   lista.innerHTML = todas.map((op, idx) => {
     const parImpar  = idx % 2 === 0 ? 'par' : 'impar';
-    const estadoClass = op.estado === 'PAGO' ? 'pago' : op.estado === 'SINALIZADA' ? 'sinalizada' : op.estado === 'EM_BAIXA' ? 'baixa' : '';
-    const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'SINALIZADA' ? 'sinalizada' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
-    const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'SINALIZADA' ? '✍️ Sinalizada' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
+    const estadoClass = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : '';
+    const btnClass    = op.estado === 'PAGO' ? 'pago' : op.estado === 'EM_BAIXA' ? 'baixa' : 'aberta';
+    const btnLabel    = op.estado === 'PAGO' ? '✓ Pago' : op.estado === 'EM_BAIXA' ? '⬇ Baixar' : '✓ Pagar';
     const fotoHtml = op.fotoUrl
       ? `<img src="${esc(_normalizarFotoUrl(op.fotoUrl))}" style="width:100%;height:100%;object-fit:contain" alt="" onerror="this.style.display='none'">`
       : `<span style="font-size:32px">${op.isPA?'🏭':'📦'}</span>`;
@@ -1970,7 +1968,7 @@ function renderOPS(ops) {
         <div class="op-row-btns">
           <button class="btn-silk btn-silk-metal" data-acao="metal" data-zpl="${esc(op.zplMetal||'')}">🖨 Metal</button>
           <button class="btn-silk" data-acao="op" data-zpl="${esc(op.zpl||'')}">🖨 OP</button>
-          <button class="btn-pagar-op ${btnClass}" data-acao="${(op.estado!=='PAGO'&&op.estado!=='SINALIZADA')?'pagar':''}">${btnLabel}</button>
+          <button class="btn-pagar-op ${btnClass}" data-acao="${op.estado!=='PAGO'?'pagar':''}">${btnLabel}</button>
           <div class="op-row-btns-right">
             ${op.obs  ? `<span class="op-obs-label">📝 ${esc(op.obs)}</span>` : ''}
             ${op.silk ? `<span class="op-silk-label">SILK: ${esc(op.silk)}</span>` : ''}
@@ -2219,12 +2217,19 @@ async function confirmarSinalizarOP() {
   const chaveIdem = _gerarChave();
   setBtn('btn-confirmar-sinalizar', true, '<span class="spinner"></span> Gravando...');
   try {
-    const res = await api('baixarOPSemEstoque', {
-      op: _opAtual.op, codigo: _opAtual.codigo, isPA: true,
-      descricao: _opAtual.descricao || '', obs: motivo, chaveIdem,
+    // Mesmo caminho de todo pagamento real (gravarMovimentoPA) — só com
+    // qtde 0 e permitirZero:true, que essa função exige pra aceitar zero.
+    // A própria fórmula PAGO da aba OPS reconhece esse movimento, sem
+    // precisar marcar nada à parte.
+    const res = await api('gravarMovimentoPA', {
+      codigo: _opAtual.codigo, descricao: _opAtual.descricao || '',
+      tipo: 'SAIDA', qtde: 0, permitirZero: true, op: _opAtual.op,
+      obs: `[Sinalização sem retirada de estoque] ${motivo}`,
       usuario: USUARIO.nome || USUARIO.usuario,
+      qrcode: '', chaveIdem,
     });
     if (!res?.ok) { mostrarMsg(msg, res?.mensagem || 'Erro.', 'err'); return; }
+    if (res.jaGravado) { mostrarMsg(msg, '⚠️ Esta OP já foi sinalizada/paga anteriormente.', 'warn'); return; }
     fecharModal('modal-sinalizar-op');
     toast('✔ OP sinalizada sem retirar estoque!');
     carregarOPS();

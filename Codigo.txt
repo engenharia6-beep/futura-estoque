@@ -371,7 +371,6 @@ function doPost(e) {
 
       // ── Triangular (nova versão com baixa de insumos) ─────────────────────
       'pagarTriangular':        () => pagarOPTriangularPA(dados),
-      'baixarOPSemEstoque':     () => baixarOPSemEstoque(dados),
 
       // ── Mudança de endereço ───────────────────────────────────────────────
       'mudarEndereco':          () => mudarEndereco(dados),
@@ -1594,9 +1593,15 @@ function gravarMovimentoPA(dados) {
     const isSaida  = String(dados.tipo||'').toUpperCase() === 'SAIDA';
     const qtde     = Number(dados.qtde||0);
     const chaveIdem= String(dados.chaveIdem||'').trim(); // proteção contra dupla gravação
+    // permitirZero: só usado pelo botão "Sinalizar OP sem retirar estoque" —
+    // grava um movimento de qtde 0 (não muda saldo) pra sinalizar a OP como
+    // paga via a própria fórmula PAGO (que confere existência de movimento),
+    // sem precisar duplicar toda a lógica desta função. Todo outro chamador
+    // continua exigindo qtde > 0 normalmente.
+    const permitirZero = !!dados.permitirZero;
 
     if (!codigo) return { ok: false, mensagem: 'Código PA não informado.' };
-    if (!qtde || qtde <= 0) return { ok: false, mensagem: 'Quantidade inválida.' };
+    if (qtde < 0 || (!permitirZero && qtde <= 0)) return { ok: false, mensagem: 'Quantidade inválida.' };
 
     // ── Leitura 1: Cadastro_PA — situação + endereço numa leitura só ──────
     const infoCadPA = _mapaCadastroInfo(NOME_ABA_CADASTRO_PA);
@@ -1964,10 +1969,9 @@ function listarOPS() {
     const iPago    = idx['PAGO']       ?? -1; // coluna com fórmula (ARRAYFORMULA/COUNTIF)
                                                // que já verifica na planilha se a OP tem
                                                // movimento — substitui escanear Movimento/
-                                               // Movimento_PA inteiros aqui no código
-    const iStatus  = idx['STATUS']     ?? -1; // coluna livre (nunca usada antes) — usada por
-                                               // baixarOPSemEstoque() pra sinalizar a OP sem
-                                               // gerar movimento nenhum (ver essa função)
+                                               // Movimento_PA inteiros aqui no código. Um
+                                               // movimento de qtde 0 (ver "Sinalizar OP sem
+                                               // retirar estoque") também satisfaz essa fórmula
     const iCliente = idx['CLIENTE']    ?? -1; // coluna P — quem fez o pedido, pra equipe
                                                // de estoque saber a quem entregar
 
@@ -1983,11 +1987,9 @@ function listarOPS() {
         const isPA   = origem === 'PA';
         const posicaoPlanilha = get(r, iPosicao).toUpperCase();
 
-        // Estado: SINALIZADA (baixa manual sem estoque) tem prioridade, depois
-        // PAGO (fórmula), depois EM_BAIXA (planilha), senão ABERTA
+        // Estado: PAGO se a coluna PAGO (fórmula) diz, EM_BAIXA se planilha diz, senão ABERTA
         let estado;
-        if (get(r, iStatus).toUpperCase() === 'SINALIZADA_SEM_ESTOQUE') estado = 'SINALIZADA';
-        else if (get(r, iPago).toUpperCase() === 'PAGO') estado = 'PAGO';
+        if (get(r, iPago).toUpperCase() === 'PAGO') estado = 'PAGO';
         else if (posicaoPlanilha === 'EM BAIXA')    estado = 'EM_BAIXA';
         else                                         estado = 'ABERTA';
 
@@ -1999,7 +2001,7 @@ function listarOPS() {
           qtde:     Number(r[iQtde < 0 ? 0 : iQtde]||0),
           origem,                          // 'INSUMO' | 'PA'
           isPA,
-          estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA' | 'SINALIZADA'
+          estado,                          // 'ABERTA' | 'PAGO' | 'EM_BAIXA'
           cliente:  get(r, iCliente),
           obs:      get(r, iObs),
           zpl:      get(r, iZPL),
@@ -2008,84 +2010,6 @@ function listarOPS() {
           fotoUrl:  get(r, iFoto),
         };
       });
-  } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  baixarOPSemEstoque — sinaliza a OP como resolvida gravando um movimento
-//  de QUANTIDADE ZERO em Movimento/Movimento_PA (não muda saldo de nada) +
-//  marca a coluna STATUS da OP (livre, nunca usada antes) pra exibir
-//  diferente de um pagamento real no app. O movimento zero existe porque o
-//  fluxo externo do usuário lê Movimento/Movimento_PA pra saber que a OP
-//  foi processada — só marcar STATUS não bastava.
-//  Não reusa gravarMovimento/gravarMovimentoPA: gravarMovimentoPA bloqueia
-//  qtde<=0 explicitamente ("Quantidade inválida"), e não é desejável afrouxar
-//  essa validação na função usada por todo pagamento real só por causa deste
-//  caso raro. Em vez disso, grava a linha direto — mesmo padrão que
-//  transferirCodigo/pagarOPTriangularPA já usam.
-// ════════════════════════════════════════════════════════════════════════════
-function baixarOPSemEstoque(dados) {
-  try {
-    const op        = String(dados.op || '').trim();
-    const codigo    = String(dados.codigo || '').trim();
-    const isPA      = !!dados.isPA;
-    const motivo    = String(dados.obs || dados.motivo || '').trim();
-    const usuario   = String(dados.usuario || '').trim();
-    const chaveIdem = String(dados.chaveIdem || '').trim();
-    if (!op)     return { ok: false, mensagem: 'OP não informada.' };
-    if (!codigo) return { ok: false, mensagem: 'Código não informado.' };
-    if (!motivo) return { ok: false, mensagem: 'Informe o motivo da baixa sem estoque.' };
-
-    const nomeCadastro = isPA ? NOME_ABA_CADASTRO_PA : NOME_ABA_CADASTRO;
-    const nomeMov       = isPA ? NOME_ABA_MOVIMENTO_PA : NOME_ABA_MOVIMENTO;
-    const infoCad = _mapaCadastroInfo(nomeCadastro);
-    const item = infoCad[codigo];
-    if (item === undefined) return { ok: false, mensagem: `Item '${codigo}' não encontrado.` };
-    if (item.situacao === 'INATIVO') return { ok: false, mensagem: `Item '${codigo}' está INATIVO.` };
-
-    const sh = _sh(nomeMov);
-    if (!sh) return { ok: false, mensagem: `Aba ${nomeMov} não encontrada.` };
-    const dadosSh      = sh.getDataRange().getValues();
-    const header       = dadosSh[0];
-    const linhasAntes  = dadosSh.length;
-
-    if (chaveIdem) {
-      const iChave = header.findIndex(v => _norm(v) === 'chave');
-      if (iChave >= 0 && dadosSh.slice(1).some(r => String(r[iChave]||'').trim() === chaveIdem))
-        return { ok: true, jaGravado: true };
-    }
-
-    const id = Utilities.getUuid().substring(0,8);
-    sh.appendRow(_montarLinhaMovimento(header, {
-      id, data: new Date(), tipo: 'SAIDA', op, codigo,
-      descricao: dados.descricao || item.descricao || '',
-      qtde: 0, endereco: item.endereco || '',
-      obs: `[Sinalização sem retirada de estoque] ${motivo}`,
-      usuario, chave: chaveIdem,
-    }));
-    const verif = _verificarGravacao(sh, [id], linhasAntes);
-    if (!verif.ok) return { ok: false, mensagem: 'Movimento não confirmado. ' + (verif.erro||'') };
-    if (isPA) _sincronizarResumoPA(codigo); else _sincronizarResumoInsumo(codigo);
-
-    // Marca STATUS na OP pra exibir diferente de um pagamento real no app
-    // (não toca PAGO — fórmula — nem POSICAO — usada por outros filtros)
-    const shOPS = _sh(NOME_ABA_OPS);
-    if (shOPS) {
-      const headerOPS = shOPS.getRange(1, 1, 1, shOPS.getLastColumn()).getValues()[0];
-      const idxOPS = {};
-      headerOPS.forEach((v, i) => { idxOPS[String(v||'').trim().toUpperCase()] = i; });
-      const iOP     = idxOPS['OP'] ?? idxOPS['N_OP'] ?? -1;
-      const iStatus = idxOPS['STATUS'] ?? -1;
-      if (iOP >= 0 && iStatus >= 0) {
-        const lastRowOPS = shOPS.getLastRow();
-        if (lastRowOPS >= 2) {
-          const colOP = shOPS.getRange(2, iOP + 1, lastRowOPS - 1, 1).getValues();
-          const idxLinha = colOP.findIndex(r => String(r[0]||'').trim() === op);
-          if (idxLinha >= 0) shOPS.getRange(idxLinha + 2, iStatus + 1).setValue('SINALIZADA_SEM_ESTOQUE');
-        }
-      }
-    }
-    return { ok: true };
   } catch(e) { return { ok: false, mensagem: 'Erro: ' + e.message }; }
 }
 
