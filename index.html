@@ -990,7 +990,7 @@ let _filaImpressao   = [];   // [{ codigo, tipo:'insumo'|'pa' }]
 // ══════════════════════════════════════════════════════
 //  API
 // ══════════════════════════════════════════════════════
-const APP_VERSION = '4fc4b7f · 16/11/2026';
+const APP_VERSION = '4fc4b7f+diag · 16/11/2026';
 
 // Chave única por envio — protege contra dupla gravação em caso de timeout
 function _gerarChave() {
@@ -1022,15 +1022,20 @@ async function api(acao, dados = {}) {
   for (let tentativa = 1; tentativa <= MAX; tentativa++) {
     const ctrl = new AbortController();
     const t    = setTimeout(() => ctrl.abort(), CONFIG.TIMEOUT_MS);
+    const t0 = Date.now();
     try {
       const result = await _apiFetch(acao, dados, ctrl.signal);
       clearTimeout(t);
+      // Diagnóstico: avisa qual ação foi lenta e quanto levou
+      const seg = Math.round((Date.now() - t0) / 1000);
+      if (seg >= 15) toast(`🐢 ${acao} levou ${seg}s`, 'warn', 6000);
+      console.log('[API]', acao, seg + 's');
       return result;
     } catch(e) {
       clearTimeout(t);
       ultimoErro = e;
       if (e.name === 'AbortError') {
-        throw Object.assign(new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.'), { timeout: true });
+        throw Object.assign(new Error(`⏳ Operação "${acao}" demorou mais de ${Math.round(CONFIG.TIMEOUT_MS/1000)}s. Verifique se foi registrada antes de tentar novamente.`), { timeout: true, acao });
       }
       // Retenta em 404 ou erro de rede — espera 4s antes da próxima tentativa
       const retentar = (e.httpStatus === 404 || e.name === 'TypeError') && tentativa < MAX;
