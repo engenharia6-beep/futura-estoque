@@ -1030,7 +1030,7 @@ async function api(acao, dados = {}) {
       clearTimeout(t);
       ultimoErro = e;
       if (e.name === 'AbortError') {
-        throw new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.');
+        throw Object.assign(new Error('⏳ Operação demorou mais que o esperado. Verifique se a baixa foi registrada antes de tentar novamente.'), { timeout: true });
       }
       // Retenta em 404 ou erro de rede — espera 4s antes da próxima tentativa
       const retentar = (e.httpStatus === 404 || e.name === 'TypeError') && tentativa < MAX;
@@ -2501,6 +2501,19 @@ function atualizarContadorInsumos() {
   if (el) el.textContent = `${marcados} de ${disponiveis} selecionados${bloqueados ? ` · ${bloqueados} bloqueado(s)` : ''}`;
 }
 
+// Após timeout: pergunta ao servidor (leitura leve) se a chave já foi gravada.
+// Tenta algumas vezes com pausa, pois o servidor pode estar ainda terminando.
+async function _verificarBaixaGravada(chave) {
+  for (let i = 0; i < 4; i++) {
+    try {
+      const r = await api('verificarBaixa', { chave });
+      if (r?.ok && r.gravado) return true;
+    } catch(_) { /* ignora e tenta de novo */ }
+    await new Promise(res => setTimeout(res, 8000));
+  }
+  return false;
+}
+
 async function confirmarGravarInsumos() {
   if (!_contextoInsumos) return;
   if (_requisicaoEmAndamento) { toast('⏳ Aguarde, operação em andamento...', 'warn'); return; }
@@ -2567,7 +2580,22 @@ async function confirmarGravarInsumos() {
       toast(texto);
     }
     setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; carregarOPS(); }, 1800);
-  } catch(e) { mostrarMsg(msg, e.message, 'err'); }
+  } catch(e) {
+    if (e.timeout) {
+      // O servidor pode ter gravado mesmo sem responder a tempo — confere pela chave
+      mostrarMsg(msg, '⏳ Demorou mais que o esperado. Verificando se a baixa foi gravada...', 'warn');
+      const gravou = await _verificarBaixaGravada(chaveIdem);
+      if (gravou) {
+        mostrarMsg(msg, '✔ Baixa confirmada no servidor (a resposta é que demorou).', 'ok');
+        toast('✔ Baixa gravada!');
+        setTimeout(() => { fecharModal('modal-insumos-confirm'); _contextoInsumos = null; carregarOPS(); }, 1800);
+      } else {
+        mostrarMsg(msg, 'Ainda não consta como gravada — o servidor pode estar processando. Aguarde cerca de 1 minuto e toque em Confirmar novamente (não duplica a baixa).', 'warn');
+      }
+    } else {
+      mostrarMsg(msg, e.message, 'err');
+    }
+  }
   finally {
     _requisicaoEmAndamento = false;
     setBtn('btn-gravar-insumos', false, '✔ Confirmar e Gravar');
