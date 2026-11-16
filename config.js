@@ -5,7 +5,7 @@
 
 const CONFIG = {
   GAS_URL: 'https://script.google.com/macros/s/AKfycbwgEUSW5rliLXtkzPYsFYS46BrnrCrkcCHLdwL6E3lAW9CdOlC9Enx8aN05BmZB6bOg/exec',
-  TIMEOUT_MS: 60000, // 60s — GAS pode demorar até 30s em planilhas grandes
+  TIMEOUT_MS: 150000, // 150s — GAS chegou a levar 60-300s com a planilha recalculando (nov/2026)
 };
 // A versão exibida no app é a const APP_VERSION em index.html (commit do
 // frontend), não este arquivo — esse campo existia duplicado aqui sem
